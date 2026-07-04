@@ -69,9 +69,9 @@ func cmdServe(args []string) error {
 	authn.RegisterRoutes(mux) // accesorio: OIDC login (solo federado)
 
 	tls := os.Getenv("COOKIE_SECURE") == "1"
-	var h http.Handler = authn.Gate(mux)   // auth (cookie o Bearer)
-	h = newIPLimiter(20, 60).middleware(h) // rate limit por IP
-	h = securityHeaders(h, tls)            // headers conservadores
+	var h http.Handler = authn.Gate(mux)    // auth (cookie o Bearer)
+	h = newIPLimiterFromEnv().middleware(h) // rate limit por IP (config por .env)
+	h = securityHeaders(h, tls)             // headers conservadores
 
 	fmt.Fprintf(os.Stderr, "searchgirl: serving on %s [auth=%s] — API at /api, MCP at /mcp (searxng %s)\n", *httpAddr, authn.Mode(), svc.Client.BaseURL)
 	return http.ListenAndServe(*httpAddr, h)

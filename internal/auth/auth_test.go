@@ -29,7 +29,7 @@ func TestDisabledGatesNothing(t *testing.T) {
 }
 
 func TestTokenGate(t *testing.T) {
-	a := &Auth{enabled: true, token: "secreto"}
+	a := &Auth{enabled: true, tokens: parseTokens("secreto")}
 	srv := httptest.NewServer(a.Gate(okHandler()))
 	defer srv.Close()
 
@@ -165,11 +165,59 @@ func TestFederatedIgnoresLocalCreds(t *testing.T) {
 }
 
 func TestMeReportsMode(t *testing.T) {
-	a := &Auth{enabled: true, token: "t"}
+	a := &Auth{enabled: true, tokens: parseTokens("t")}
 	rec := httptest.NewRecorder()
 	a.handleMe(rec, httptest.NewRequest(http.MethodGet, "/auth/me", nil))
 	body := rec.Body.String()
 	if !strings.Contains(body, `"mode":"token"`) || !strings.Contains(body, `"authenticated":false`) {
 		t.Fatalf("me = %s", body)
+	}
+}
+
+func TestMultiTokenNamedAndRevocable(t *testing.T) {
+	a := &Auth{enabled: true, tokens: parseTokens("claude:abc123, n8n:def456, suelto789")}
+	srv := httptest.NewServer(a.Gate(okHandler()))
+	defer srv.Close()
+
+	try := func(token string) (int, string) {
+		req, _ := http.NewRequest(http.MethodGet, srv.URL+"/api/x", nil)
+		if token != "" {
+			req.Header.Set("Authorization", "Bearer "+token)
+		}
+		resp, err := http.DefaultClient.Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer resp.Body.Close()
+		// nombre del token vía /auth/me
+		reqMe, _ := http.NewRequest(http.MethodGet, srv.URL+"/auth/me", nil)
+		if token != "" {
+			reqMe.Header.Set("Authorization", "Bearer "+token)
+		}
+		rec := httptest.NewRecorder()
+		a.handleMe(rec, reqMe)
+		return resp.StatusCode, rec.Body.String()
+	}
+
+	if code, me := try("abc123"); code != 200 || !strings.Contains(me, `"token_name":"claude"`) {
+		t.Fatalf("token claude: code=%d me=%s", code, me)
+	}
+	if code, me := try("def456"); code != 200 || !strings.Contains(me, `"token_name":"n8n"`) {
+		t.Fatalf("token n8n: code=%d me=%s", code, me)
+	}
+	if code, me := try("suelto789"); code != 200 || !strings.Contains(me, `"token_name":"token3"`) {
+		t.Fatalf("token sin nombre: code=%d me=%s", code, me)
+	}
+	if code, _ := try("abc124"); code != 401 {
+		t.Fatalf("token inválido: code=%d, want 401", code)
+	}
+
+	// Revocación: sacar "n8n" del .env y el resto sigue andando.
+	a.tokens = parseTokens("claude:abc123, suelto789")
+	if code, _ := try("def456"); code != 401 {
+		t.Fatalf("token revocado debe dar 401, dio %d", code)
+	}
+	if code, _ := try("abc123"); code != 200 {
+		t.Fatalf("token vigente tras revocar otro: %d", code)
 	}
 }

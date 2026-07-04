@@ -37,7 +37,7 @@ type Auth struct {
 	localUser    [32]byte // sha256 of SEARCHGIRL_USER (local login, standalone only)
 	localPass    [32]byte // sha256 of SEARCHGIRL_PASS
 	local        bool
-	token        string // SEARCHGIRL_MCP_TOKEN: shared Bearer secret for programmatic clients (MCP/API)
+	tokens       []apiToken // SEARCHGIRL_MCP_TOKEN: Bearer secrets for programmatic clients (MCP/API)
 	secret       []byte
 	cookieSecure bool
 
@@ -52,6 +52,35 @@ type flow struct {
 	verifier string
 	nonce    string
 	exp      time.Time
+}
+
+// apiToken is one named Bearer secret. Several can coexist (one per client:
+// "claude:abc..., n8n:def..."), so revoking one is removing it from the .env
+// and restarting — without rotating the others.
+type apiToken struct {
+	name string
+	hash [32]byte
+}
+
+// parseTokens reads SEARCHGIRL_MCP_TOKEN: a comma-separated list where each
+// item is "name:secret" or a bare secret (auto-named token1, token2…).
+func parseTokens(s string) []apiToken {
+	var out []apiToken
+	for _, item := range strings.Split(s, ",") {
+		item = strings.TrimSpace(item)
+		if item == "" {
+			continue
+		}
+		name, secret := fmt.Sprintf("token%d", len(out)+1), item
+		if i := strings.Index(item, ":"); i > 0 {
+			name, secret = strings.TrimSpace(item[:i]), strings.TrimSpace(item[i+1:])
+		}
+		if secret == "" {
+			continue
+		}
+		out = append(out, apiToken{name: name, hash: sha256.Sum256([]byte(secret))})
+	}
+	return out
 }
 
 type claims struct {
@@ -83,7 +112,7 @@ func Disabled() *Auth { return &Auth{enabled: false} }
 // Humans use local login or SSO; machines use the token. With nothing set,
 // auth is Disabled (standalone: safe only on loopback or behind a firewall).
 func FromEnv(ctx context.Context) (*Auth, error) {
-	token := os.Getenv("SEARCHGIRL_MCP_TOKEN")
+	tokens := parseTokens(os.Getenv("SEARCHGIRL_MCP_TOKEN"))
 	if os.Getenv("AUTH_MODE") != "federado" {
 		user, pass := os.Getenv("SEARCHGIRL_USER"), os.Getenv("SEARCHGIRL_PASS")
 		if user != "" && pass != "" {
@@ -93,16 +122,16 @@ func FromEnv(ctx context.Context) (*Auth, error) {
 				_, _ = rand.Read(secret) // ephemeral: sessions reset on restart
 			}
 			a := &Auth{
-				enabled: true, local: true, token: token,
+				enabled: true, local: true, tokens: tokens,
 				localUser: sha256.Sum256([]byte(user)), localPass: sha256.Sum256([]byte(pass)),
 				secret: secret, cookieSecure: os.Getenv("COOKIE_SECURE") == "1",
 			}
 			return a, nil
 		}
-		if token == "" {
+		if len(tokens) == 0 {
 			return Disabled(), nil
 		}
-		return &Auth{enabled: true, token: token}, nil // token-only, no OIDC
+		return &Auth{enabled: true, tokens: tokens}, nil // token-only, no OIDC
 	}
 	issuer := os.Getenv("LOCKATUS_ISSUER")
 	clientID := os.Getenv("LOCKATUS_CLIENT_ID")
@@ -122,7 +151,7 @@ func FromEnv(ctx context.Context) (*Auth, error) {
 	return &Auth{
 		enabled:      true,
 		federated:    true,
-		token:        token,
+		tokens:       tokens,
 		secret:       secret,
 		cookieSecure: os.Getenv("COOKIE_SECURE") == "1",
 		oauth2: oauth2.Config{
@@ -201,19 +230,27 @@ func (a *Auth) authorized(r *http.Request) bool {
 	if (a.federated || a.local) && a.session(r) != nil {
 		return true
 	}
-	return a.token != "" && a.bearerOK(r)
+	_, ok := a.bearerToken(r)
+	return ok
 }
 
-// bearerOK compares the Authorization: Bearer header to the configured token
-// in constant time (no early-exit timing leak).
-func (a *Auth) bearerOK(r *http.Request) bool {
+// bearerToken matches the Authorization: Bearer header against every
+// configured token (constant-time compare over sha256, no early-exit timing
+// leak) and returns the matched token's name.
+func (a *Auth) bearerToken(r *http.Request) (string, bool) {
 	const p = "Bearer "
 	h := r.Header.Get("Authorization")
-	if !strings.HasPrefix(h, p) {
-		return false
+	if len(a.tokens) == 0 || !strings.HasPrefix(h, p) {
+		return "", false
 	}
-	got := strings.TrimSpace(h[len(p):])
-	return subtle.ConstantTimeCompare([]byte(got), []byte(a.token)) == 1
+	got := sha256.Sum256([]byte(strings.TrimSpace(h[len(p):])))
+	name, matched := "", false
+	for _, t := range a.tokens { // sin corte temprano: se comparan todos
+		if subtle.ConstantTimeCompare(got[:], t.hash[:]) == 1 {
+			name, matched = t.name, true
+		}
+	}
+	return name, matched
 }
 
 // protected covers everything that spends resources or reaches the network on
@@ -296,6 +333,9 @@ func (a *Auth) handleMe(w http.ResponseWriter, r *http.Request) {
 			resp["role"] = s.Role
 		}
 	}
+	if name, ok := a.bearerToken(r); ok {
+		resp["token_name"] = name // qué cliente programático está autenticado
+	}
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	_ = json.NewEncoder(w).Encode(resp)
 }
@@ -308,7 +348,7 @@ func (a *Auth) Mode() string {
 	if a.local {
 		return "local"
 	}
-	if a.token != "" {
+	if len(a.tokens) > 0 {
 		return "token"
 	}
 	return "off"

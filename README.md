@@ -107,7 +107,9 @@ LLM_MODEL=qwen2.5:7b
 | `ANTHROPIC_API_KEY` / `ANTHROPIC_MODEL` | — | Proveedor Anthropic (prioridad si está) |
 | `LLM_BASE_URL` / `LLM_MODEL` / `LLM_API_KEY` | — | Proveedor OpenAI-compatible |
 | `SEARCHGIRL_USER` / `SEARCHGIRL_PASS` | — | Login local standalone: un usuario, pantalla de entrada estándar Escriba |
-| `SEARCHGIRL_MCP_TOKEN` | — | Bearer para proteger API+MCP en un VPS (sin OIDC) |
+| `SEARCHGIRL_MCP_TOKEN` | — | Tokens Bearer para API+MCP. Varios con nombre: `claude:abc...,n8n:def...` — revocar uno no rota los demás |
+| `SEARCHGIRL_TRUSTED_PROXIES` | — | IPs/CIDRs del reverse proxy (coma-separados). Con esto el rate limit usa la IP real del cliente vía `X-Forwarded-For` |
+| `SEARCHGIRL_RATE_RPS` / `SEARCHGIRL_RATE_BURST` | `20` / `60` | Rate limit por IP en API, MCP y login (`RPS=0` lo desactiva) |
 | `AUTH_MODE` | vacío | `federado` activa OIDC con Lockatus |
 | `LOCKATUS_ISSUER` / `LOCKATUS_CLIENT_ID` / `LOCKATUS_REDIRECT_URI` | — | Requeridas en federado |
 | `SECRET_KEY` | aleatoria | HMAC de la cookie de sesión |

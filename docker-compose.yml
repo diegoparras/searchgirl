@@ -31,7 +31,14 @@ services:
       SEARCHGIRL_PASS: ${SEARCHGIRL_PASS:-}
       SECRET_KEY: ${SECRET_KEY:-}
       COOKIE_SECURE: ${COOKIE_SECURE:-0}
+      # Tokens Bearer para agentes: varios con nombre, separados por coma
+      # (ej. "claude:abc...,n8n:def..."). Revocar uno = sacarlo y reiniciar.
       SEARCHGIRL_MCP_TOKEN: ${SEARCHGIRL_MCP_TOKEN:-}
+      # Detrás de un reverse proxy: sus IPs/CIDRs para que el rate limit use
+      # la IP real del cliente (X-Forwarded-For). Ej: 172.16.0.0/12
+      SEARCHGIRL_TRUSTED_PROXIES: ${SEARCHGIRL_TRUSTED_PROXIES:-}
+      SEARCHGIRL_RATE_RPS: ${SEARCHGIRL_RATE_RPS:-}
+      SEARCHGIRL_RATE_BURST: ${SEARCHGIRL_RATE_BURST:-}
       # Dentro del contenedor el bind :8080 nunca es loopback; la exposición
       # real la decide el mapeo de ports de arriba (127.0.0.1 por defecto).
       # Por eso acá el fail-safe del binario se relaja: la puerta la maneja

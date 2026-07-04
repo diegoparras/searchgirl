@@ -69,8 +69,13 @@ Easypanel → **Create Project** → nombre `searchgirl`.
   # LLM_MODEL=deepseek/deepseek-chat
   # LLM_API_KEY=sk-or-...
 
-  # Opcional — Bearer para agentes (MCP/API por token, compone con el login):
-  # SEARCHGIRL_MCP_TOKEN=<token largo>
+  # Opcional — Bearer para agentes (MCP/API por token, compone con el login).
+  # Varios tokens con nombre; revocar uno = sacarlo de la lista y redeployar:
+  # SEARCHGIRL_MCP_TOKEN=claude:<token largo>,n8n:<otro token>
+
+  # Detrás del proxy del panel (Traefik/nginx interno de Docker): con esto el
+  # rate limit distingue clientes reales en vez de ver todo como una sola IP:
+  SEARCHGIRL_TRUSTED_PROXIES=172.16.0.0/12
   ```
 - **Domains → Add Domain**: tu dominio (p.ej. `buscar.tu-dominio.com`), **HTTPS on**,
   puerto interno **8080**. Easypanel emite el certificado solo.
