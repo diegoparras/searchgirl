@@ -1,0 +1,12 @@
+# limiter.toml — presente pero NEUTRO: el limiter está deshabilitado en
+# settings.yml (server.limiter: false) porque SearXNG no se expone al host;
+# solo Searchgirl lo consume por la red interna de Docker.
+#
+# Si algún día exponés SearXNG directamente, activá el limiter y dejá pasar
+# a Searchgirl por IP interna:
+#
+# [botdetection.ip_lists]
+# pass_ip = ["127.0.0.1/8", "::1/128", "172.16.0.0/12"]
+
+[botdetection.ip_lists]
+pass_ip = ["127.0.0.1/8", "::1/128", "172.16.0.0/12"]

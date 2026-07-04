@@ -1,0 +1,52 @@
+# Searchgirl standalone: la app + su SearXNG interno.
+#
+#   docker compose up -d --build
+#   http://localhost:8089            → UI web (y /api, /mcp)
+#
+# SearXNG NO publica puerto: solo Searchgirl lo alcanza por la red interna.
+
+name: searchgirl
+
+services:
+  searchgirl:
+    build: .
+    image: ghcr.io/diegoparras/searchgirl:latest
+    container_name: searchgirl
+    # host.docker.internal también en Linux (en Docker Desktop ya existe):
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    ports:
+      - "8089:8080"
+    environment:
+      SEARXNG_URL: http://searxng:8080
+      SEARCHGIRL_DEFAULT_LANGUAGE: ${SEARCHGIRL_DEFAULT_LANGUAGE:-es}
+      # LLM opcional (modo Respuesta IA). Sin esto, Searchgirl funciona igual.
+      #   ANTHROPIC_API_KEY / ANTHROPIC_MODEL          → proveedor Anthropic
+      #   LLM_BASE_URL / LLM_MODEL / LLM_API_KEY       → Ollama, OpenRouter, DeepSeek…
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      ANTHROPIC_MODEL: ${ANTHROPIC_MODEL:-}
+      LLM_BASE_URL: ${LLM_BASE_URL:-}
+      LLM_MODEL: ${LLM_MODEL:-}
+      LLM_API_KEY: ${LLM_API_KEY:-}
+    depends_on:
+      searxng:
+        condition: service_healthy
+    restart: unless-stopped
+
+  searxng:
+    image: ghcr.io/searxng/searxng:latest
+    container_name: searchgirl-searxng
+    volumes:
+      - ./searxng:/etc/searxng:ro
+    environment:
+      SEARXNG_SECRET: ${SEARXNG_SECRET:-searchgirl-dev-secret}
+    # Descomentá SOLO si querés usar el MCP por stdio desde el host
+    # (el binario local necesita alcanzar SearXNG):
+    # ports:
+    #   - "127.0.0.1:8090:8080"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8080/healthz"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+    restart: unless-stopped

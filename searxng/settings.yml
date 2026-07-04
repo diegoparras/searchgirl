@@ -1,0 +1,22 @@
+# settings.yml de SearXNG para Searchgirl.
+#
+# SearXNG corre como servicio INTERNO (sin puerto publicado al host): solo
+# Searchgirl le habla. Por eso el limiter va apagado y el formato json
+# habilitado — sin json, la API devuelve 403 y Searchgirl no funciona.
+use_default_settings: true
+
+server:
+  limiter: false
+  image_proxy: true
+  # secret_key se toma de la env SEARXNG_SECRET (ver docker-compose.yml)
+
+search:
+  formats:
+    - html
+    - json
+  autocomplete: duckduckgo
+  safe_search: 0
+  default_lang: auto
+
+ui:
+  static_use_hash: true

@@ -1,0 +1,456 @@
+/* Searchgirl — SPA mínima sobre /api. Sin frameworks, sin CDN. Todo el
+   contenido remoto entra por textContent (nunca innerHTML con datos). */
+"use strict";
+
+const $ = (sel) => document.querySelector(sel);
+
+const CATS = [
+  ["general", "General"], ["news", "Noticias"], ["images", "Imágenes"],
+  ["videos", "Videos"], ["science", "Ciencia"], ["it", "IT"],
+  ["files", "Archivos"], ["map", "Mapas"], ["music", "Música"],
+];
+
+const state = { q: "", category: "general", language: "", timeRange: "", safe: "0", page: 1, loading: false };
+let config = null;
+
+/* ---------- init ---------- */
+
+async function init() {
+  wireChrome();
+  buildTabs();
+  wireSearch();
+
+  // /auth/me primero: es la ÚNICA ruta que el gate deja libre. Con sesión
+  // pendiente, mostramos el login y no seguimos (el resto de /api está 401).
+  let me = null;
+  try { me = await (await fetch("/auth/me")).json(); } catch { /* red caída: seguimos */ }
+  if (me && me.enabled && !me.authenticated) {
+    $("#loginGate").classList.remove("hidden");
+    return;
+  }
+  if (me && me.email) {
+    const u = $("#menuUser");
+    u.textContent = me.email + (me.role ? " · " + me.role : "");
+    u.classList.remove("hidden");
+    $("#logoutSep").classList.remove("hidden");
+    $("#logoutBtn").classList.remove("hidden");
+  }
+
+  try {
+    config = await (await fetch("/api/config")).json();
+  } catch { config = {}; }
+  $("#aboutVersion").textContent = config.version || "—";
+
+  const savedLang = localStorage.getItem("searchgirl.lang") || config.default_language || "es";
+  state.language = savedLang;
+  $("#langDefault").value = savedLang;
+  $("#fLang").value = savedLang;
+
+  if (config.llm && config.llm.available) {
+    $("#aiBtn").classList.remove("hidden");
+    $("#aiBtn").addEventListener("click", runAnswer);
+  }
+
+  // Estado desde la URL (compartible / botón atrás).
+  readURL();
+  if (state.q) runSearch({ push: false });
+  window.addEventListener("popstate", () => { readURL(); state.q ? runSearch({ push: false }) : showHome(); });
+}
+
+/* ---------- chrome: kebab, tema, modal ---------- */
+
+function wireChrome() {
+  const menu = $("#menu"), kebab = $("#kebab");
+  kebab.addEventListener("click", (e) => { e.stopPropagation(); menu.classList.toggle("hidden"); });
+  document.addEventListener("click", (e) => { if (!menu.contains(e.target)) menu.classList.add("hidden"); });
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape") { menu.classList.add("hidden"); $("#aboutModal").classList.add("hidden"); }
+  });
+
+  const toggle = $("#themeToggle");
+  toggle.checked = document.documentElement.dataset.theme === "dark";
+  toggle.addEventListener("change", () => {
+    if (toggle.checked) { document.documentElement.dataset.theme = "dark"; localStorage.setItem("searchgirl.theme", "dark"); }
+    else { delete document.documentElement.dataset.theme; localStorage.removeItem("searchgirl.theme"); }
+  });
+
+  $("#langDefault").addEventListener("change", (e) => {
+    localStorage.setItem("searchgirl.lang", e.target.value);
+    state.language = e.target.value;
+    $("#fLang").value = e.target.value;
+  });
+
+  $("#aboutBtn").addEventListener("click", () => { menu.classList.add("hidden"); $("#aboutModal").classList.remove("hidden"); });
+  $("#aboutClose").addEventListener("click", () => $("#aboutModal").classList.add("hidden"));
+  $("#aboutModal").addEventListener("click", (e) => { if (e.target === $("#aboutModal")) $("#aboutModal").classList.add("hidden"); });
+
+  $("#homeLink").addEventListener("click", (e) => { e.preventDefault(); showHome(); history.pushState({}, "", "/"); });
+}
+
+/* ---------- tabs y filtros ---------- */
+
+function buildTabs() {
+  const nav = $("#catTabs");
+  for (const [key, label] of CATS) {
+    const b = document.createElement("button");
+    b.className = "cat-tab" + (key === state.category ? " active" : "");
+    b.dataset.cat = key;
+    b.textContent = label;
+    b.addEventListener("click", () => { state.category = key; runSearch(); });
+    nav.appendChild(b);
+  }
+  $("#fLang").addEventListener("change", (e) => { state.language = e.target.value; runSearch(); });
+  $("#fTime").addEventListener("change", (e) => { state.timeRange = e.target.value; runSearch(); });
+  $("#fSafe").addEventListener("change", (e) => { state.safe = e.target.value; runSearch(); });
+  $("#moreBtn").addEventListener("click", () => { state.page += 1; runSearch({ append: true, push: false }); });
+}
+
+function paintTabs() {
+  document.querySelectorAll(".cat-tab").forEach((b) => b.classList.toggle("active", b.dataset.cat === state.category));
+}
+
+/* ---------- búsqueda ---------- */
+
+function wireSearch() {
+  for (const [form, input, sugs] of [["#homeForm", "#homeInput", "#homeSugs"], ["#topForm", "#topInput", "#topSugs"]]) {
+    $(form).addEventListener("submit", (e) => {
+      e.preventDefault();
+      const q = $(input).value.trim();
+      if (!q) return;
+      state.q = q; state.page = 1;
+      hideSugs();
+      runSearch();
+    });
+    wireSuggest($(input), $(sugs));
+  }
+}
+
+function readURL() {
+  const p = new URLSearchParams(location.search);
+  state.q = (p.get("q") || "").trim();
+  state.category = CATS.some(([k]) => k === p.get("c")) ? p.get("c") : "general";
+  state.page = 1;
+}
+
+function writeURL() {
+  const p = new URLSearchParams();
+  p.set("q", state.q);
+  if (state.category !== "general") p.set("c", state.category);
+  history.pushState({}, "", "/?" + p.toString());
+}
+
+async function runSearch(opts = {}) {
+  const { append = false, push = true } = opts;
+  if (!state.q || state.loading) return;
+  if (!append) state.page = 1;
+  state.loading = true;
+
+  showResults();
+  paintTabs();
+  $("#topInput").value = state.q;
+  document.title = state.q + " — Searchgirl";
+  if (push) writeURL();
+  if (!append) {
+    renderSkeleton();
+    $("#rSide").replaceChildren();
+    $("#rEmpty").classList.add("hidden");
+    $("#aiCard").classList.add("hidden");
+    $("#aiCard").replaceChildren();
+  }
+  $("#rError").classList.add("hidden");
+
+  const p = new URLSearchParams({ q: state.q, category: state.category, safesearch: state.safe, page: String(state.page) });
+  if (state.language) p.set("language", state.language);
+  if (state.timeRange) p.set("time_range", state.timeRange);
+
+  try {
+    const r = await fetch("/api/search?" + p.toString());
+    const data = await r.json();
+    if (!r.ok) throw new Error(data.error || "error " + r.status);
+    render(data, append);
+  } catch (err) {
+    if (!append) $("#rList").replaceChildren();
+    const box = $("#rError");
+    box.textContent = "No se pudo buscar: " + err.message;
+    box.classList.remove("hidden");
+    $("#moreBtn").classList.add("hidden");
+  } finally {
+    state.loading = false;
+  }
+}
+
+/* ---------- render ---------- */
+
+function renderSkeleton() {
+  const list = $("#rList");
+  list.className = "rlist";
+  list.replaceChildren();
+  for (let i = 0; i < 5; i++) {
+    const it = el("div", "rit skel");
+    it.append(el("div", "rit-dom", "········"), el("a", "rit-tit", "························"), el("p", "rit-snip", "········································"));
+    list.appendChild(it);
+  }
+}
+
+function render(data, append) {
+  const grid = state.category === "images" || state.category === "videos";
+  const list = $("#rList");
+  list.className = "rlist" + (grid ? " grid" : "");
+  if (!append) list.replaceChildren();
+
+  for (const res of data.results) list.appendChild(grid ? cardOf(res) : itemOf(res));
+
+  const none = !append && data.results.length === 0;
+  $("#rEmpty").classList.toggle("hidden", !none);
+  $("#moreBtn").classList.toggle("hidden", data.results.length === 0);
+
+  const stats = [`${data.meta.total} resultados`, `${data.meta.took_ms} ms`];
+  $("#rStats").textContent = stats.join(" · ");
+
+  if (!append) {
+    renderSide(data);
+    renderCorrections(data);
+    renderFoot(data);
+  }
+}
+
+function itemOf(res) {
+  const it = el("div", "rit");
+  const dom = el("div", "rit-dom");
+  dom.append(el("span", "", res.domain || ""));
+  if (res.engines && res.engines.length) dom.append(el("span", "eng", "· " + res.engines.join(", ")));
+  const a = el("a", "rit-tit", res.title || res.url);
+  a.href = res.url; a.target = "_blank"; a.rel = "noopener noreferrer";
+  const snip = el("p", "rit-snip");
+  if (res.published) snip.append(el("span", "rit-date", res.published));
+  snip.append(document.createTextNode(res.snippet || ""));
+  it.append(dom, a, snip);
+  return it;
+}
+
+function cardOf(res) {
+  const a = el("a", "rcard");
+  a.href = res.url; a.target = "_blank"; a.rel = "noopener noreferrer";
+  if (res.thumbnail && /^(https?:)?\/\//.test(res.thumbnail)) {
+    const img = document.createElement("img");
+    img.loading = "lazy"; img.alt = "";
+    // Vía el proxy propio: el navegador nunca toca los hosts de los motores.
+    img.src = "/thumb?u=" + encodeURIComponent(res.thumbnail);
+    img.addEventListener("error", () => img.remove());
+    a.appendChild(img);
+  }
+  a.append(el("span", "rc-tit", res.title || res.url), el("span", "rc-dom", res.domain || ""));
+  return a;
+}
+
+function renderSide(data) {
+  const side = $("#rSide");
+  side.replaceChildren();
+  for (const ans of data.answers) {
+    const c = el("div", "side-card");
+    c.append(el("div", "side-kicker", "Respuesta directa"), el("p", "", ans));
+    side.appendChild(c);
+  }
+  for (const ib of data.infoboxes) {
+    const c = el("div", "side-card");
+    c.append(el("div", "side-kicker", "Infobox"));
+    if (ib.title) c.append(el("h3", "", ib.title));
+    if (ib.content) c.append(el("p", "", ib.content));
+    const isWikidataID = (s) => /^[QP]\d+$/.test((s || "").trim());
+    const attrs = (ib.attributes || []).filter((at) => !isWikidataID(at.value) && !isWikidataID(at.label));
+    if (attrs.length) {
+      const dl = el("dl", "ib-rows");
+      for (const at of attrs) dl.append(el("dt", "", at.label), el("dd", "", at.value));
+      c.append(dl);
+    }
+    const urls = (ib.urls || []).filter((u) => !isWikidataID(u.title));
+    if (urls.length) {
+      const links = el("div", "ib-links");
+      for (const u of urls) {
+        const a = el("a", "link", u.title || u.url);
+        a.href = u.url; a.target = "_blank"; a.rel = "noopener noreferrer";
+        links.appendChild(a);
+      }
+      c.append(links);
+    }
+    side.appendChild(c);
+  }
+}
+
+function renderCorrections(data) {
+  const box = $("#corrections");
+  box.replaceChildren();
+  const all = [...(data.corrections || []), ...(data.suggestions || []).slice(0, 3)];
+  if (!all.length) { box.classList.add("hidden"); return; }
+  box.append(document.createTextNode("Relacionado: "));
+  all.forEach((c, i) => {
+    if (i) box.append(document.createTextNode(" · "));
+    const a = el("a", "link", c);
+    a.href = "#";
+    a.addEventListener("click", (e) => { e.preventDefault(); state.q = c; state.page = 1; runSearch(); });
+    box.appendChild(a);
+  });
+  box.classList.remove("hidden");
+}
+
+function renderFoot(data) {
+  const foot = $("#rFoot");
+  foot.replaceChildren();
+  let engines = new Set();
+  for (const r of data.results) (r.engines || []).forEach((e) => engines.add(e));
+  const parts = [`Resultados vía SearXNG · ${engines.size} motores`];
+  if (data.meta.engines_failed && data.meta.engines_failed.length) {
+    parts.push(`sin respuesta: ${data.meta.engines_failed.join(", ")}`);
+  }
+  foot.append(document.createTextNode(parts.join(" · ") + " · "));
+  const a = el("a", "", "searxng.org");
+  a.href = "https://searxng.org"; a.target = "_blank"; a.rel = "noopener noreferrer";
+  foot.appendChild(a);
+}
+
+/* ---------- Respuesta IA ---------- */
+
+async function runAnswer() {
+  if (!state.q) return;
+  const card = $("#aiCard"), btn = $("#aiBtn");
+  card.replaceChildren(el("div", "side-kicker", "Respuesta IA"), el("p", "ai-load", "Buscando y sintetizando con fuentes…"));
+  card.classList.remove("hidden");
+  btn.disabled = true;
+  try {
+    const r = await fetch("/api/answer", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ query: state.q, category: state.category, language: state.language }),
+    });
+    const data = await r.json();
+    if (!r.ok) throw new Error(data.error || "error " + r.status);
+    renderAnswer(data);
+  } catch (err) {
+    card.replaceChildren(el("div", "side-kicker", "Respuesta IA"), el("p", "ai-err", "No se pudo sintetizar: " + err.message));
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+function renderAnswer(data) {
+  const card = $("#aiCard");
+  card.replaceChildren(el("div", "side-kicker", "Respuesta IA"));
+
+  const srcByN = {};
+  for (const s of data.sources) srcByN[s.n] = s;
+
+  const body = el("div", "ai-body");
+  for (const para of data.answer.split(/\n{2,}/)) {
+    const p = el("p");
+    // Solo dos construcciones: citas [n] → link, y **negrita**.
+    for (const chunk of para.split(/(\[\d{1,2}\]|\*\*[^*]+\*\*)/)) {
+      if (!chunk) continue;
+      const cite = chunk.match(/^\[(\d{1,2})\]$/);
+      if (cite && srcByN[+cite[1]]) {
+        const a = el("a", "ai-cite", chunk);
+        a.href = srcByN[+cite[1]].url; a.target = "_blank"; a.rel = "noopener noreferrer";
+        a.title = srcByN[+cite[1]].title;
+        p.appendChild(a);
+      } else if (/^\*\*[^*]+\*\*$/.test(chunk)) {
+        p.appendChild(el("strong", "", chunk.slice(2, -2)));
+      } else {
+        p.appendChild(document.createTextNode(chunk.replace(/\n/g, " ")));
+      }
+    }
+    body.appendChild(p);
+  }
+  card.appendChild(body);
+
+  const srcs = el("div", "ai-srcs");
+  for (const s of data.sources) {
+    const row = el("div", "ai-src");
+    row.append(document.createTextNode(`[${s.n}] `));
+    const a = el("a", "", `${s.title} — ${s.domain}`);
+    a.href = s.url; a.target = "_blank"; a.rel = "noopener noreferrer";
+    row.appendChild(a);
+    srcs.appendChild(row);
+  }
+  card.appendChild(srcs);
+  card.appendChild(el("div", "ai-meta", `Sintetizado por ${data.model} · ${data.took_ms} ms · puede contener errores: verificá las fuentes`));
+}
+
+/* ---------- sugerencias ---------- */
+
+function wireSuggest(input, box) {
+  let timer = null, items = [], active = -1;
+
+  const paint = () => {
+    box.replaceChildren();
+    active = -1;
+    if (!items.length) { box.classList.add("hidden"); return; }
+    items.forEach((s) => {
+      const d = el("div", "sug");
+      const ic = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+      ic.setAttribute("width", "13"); ic.setAttribute("height", "13"); ic.setAttribute("viewBox", "0 0 24 24");
+      ic.setAttribute("fill", "none"); ic.setAttribute("stroke", "currentColor"); ic.setAttribute("stroke-width", "2.2");
+      ic.innerHTML = '<circle cx="11" cy="11" r="7"/><path d="M16.5 16.5 21 21" stroke-linecap="round"/>';
+      d.append(ic, document.createTextNode(s));
+      d.addEventListener("mousedown", (e) => { e.preventDefault(); input.value = s; state.q = s; state.page = 1; hideSugs(); runSearch(); });
+      box.appendChild(d);
+    });
+    box.classList.remove("hidden");
+  };
+
+  input.addEventListener("input", () => {
+    clearTimeout(timer);
+    const q = input.value.trim();
+    if (q.length < 2) { items = []; paint(); return; }
+    timer = setTimeout(async () => {
+      try {
+        const r = await fetch("/api/suggest?q=" + encodeURIComponent(q));
+        const data = await r.json();
+        items = (data.suggestions || []).slice(0, 8);
+      } catch { items = []; }
+      paint();
+    }, 200);
+  });
+
+  input.addEventListener("keydown", (e) => {
+    const kids = [...box.children];
+    if (!kids.length || box.classList.contains("hidden")) return;
+    if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+      e.preventDefault();
+      active = e.key === "ArrowDown" ? (active + 1) % kids.length : (active - 1 + kids.length) % kids.length;
+      kids.forEach((k, i) => k.classList.toggle("active", i === active));
+      input.value = kids[active].textContent;
+    } else if (e.key === "Escape") {
+      items = []; paint();
+    }
+  });
+
+  input.addEventListener("blur", () => setTimeout(() => { items = []; paint(); }, 150));
+}
+
+function hideSugs() { $("#homeSugs").classList.add("hidden"); $("#topSugs").classList.add("hidden"); }
+
+/* ---------- vistas ---------- */
+
+function showHome() {
+  $("#results").classList.add("hidden");
+  $("#home").classList.remove("hidden");
+  $("#homeInput").value = "";
+  document.title = "Searchgirl";
+  state.q = "";
+  $("#homeInput").focus();
+}
+
+function showResults() {
+  $("#home").classList.add("hidden");
+  $("#results").classList.remove("hidden");
+}
+
+/* ---------- util ---------- */
+
+function el(tag, cls, text) {
+  const n = document.createElement(tag);
+  if (cls) n.className = cls;
+  if (text !== undefined) n.textContent = text;
+  return n;
+}
+
+init();
