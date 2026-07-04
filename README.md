@@ -128,11 +128,12 @@ MCP, miniaturas — queda gateado hasta iniciar sesión. Es un único usuario, s
 En modo **federado estas variables se ignoran**: el contrato de la suite prohíbe un login local
 conviviendo con el SSO.
 
-**Fail-safe:** si el binario escucha en una interfaz no-loopback sin ninguna auth, se niega a
-arrancar (un buscador abierto es un proxy gratis para cualquiera). Docker publica el puerto
-desde la red interna, así que el compose de este repo ya arranca bien; en un VPS usá
-`SEARCHGIRL_USER`+`SEARCHGIRL_PASS`, `SEARCHGIRL_MCP_TOKEN`, federación, o
-`SEARCHGIRL_ALLOW_INSECURE=1` si el puerto ya está firewalleado.
+**Fail-safe y exposición:** el compose publica el puerto **solo en 127.0.0.1** por defecto —
+sin auth, nadie más que tu máquina lo alcanza. Para abrirlo a la red (LAN/VPS): poné auth
+(`SEARCHGIRL_USER`+`SEARCHGIRL_PASS`, `SEARCHGIRL_MCP_TOKEN` o federación) y
+`SEARCHGIRL_BIND=0.0.0.0` en el `.env`. Si corrés el binario pelado (sin Docker) en una
+interfaz no-loopback sin auth, se niega a arrancar (un buscador abierto es un proxy gratis
+para cualquiera); `SEARCHGIRL_ALLOW_INSECURE=1` lo fuerza bajo tu responsabilidad.
 
 ## Modo suite (federado con Lockatus)
 

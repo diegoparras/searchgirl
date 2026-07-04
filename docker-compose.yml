@@ -15,8 +15,11 @@ services:
     # host.docker.internal también en Linux (en Docker Desktop ya existe):
     extra_hosts:
       - "host.docker.internal:host-gateway"
+    # Publicado SOLO en tu máquina por defecto. Para exponerlo en la red
+    # (LAN/VPS), poné auth (SEARCHGIRL_USER/PASS o token) y en el .env:
+    #   SEARCHGIRL_BIND=0.0.0.0
     ports:
-      - "8089:8080"
+      - "${SEARCHGIRL_BIND:-127.0.0.1}:8089:8080"
     environment:
       SEARXNG_URL: http://searxng:8080
       SEARCHGIRL_DEFAULT_LANGUAGE: ${SEARCHGIRL_DEFAULT_LANGUAGE:-es}
@@ -28,6 +31,12 @@ services:
       SEARCHGIRL_PASS: ${SEARCHGIRL_PASS:-}
       SECRET_KEY: ${SECRET_KEY:-}
       COOKIE_SECURE: ${COOKIE_SECURE:-0}
+      SEARCHGIRL_MCP_TOKEN: ${SEARCHGIRL_MCP_TOKEN:-}
+      # Dentro del contenedor el bind :8080 nunca es loopback; la exposición
+      # real la decide el mapeo de ports de arriba (127.0.0.1 por defecto).
+      # Por eso acá el fail-safe del binario se relaja: la puerta la maneja
+      # Docker, no el bind interno.
+      SEARCHGIRL_ALLOW_INSECURE: "1"
       # LLM opcional (modo Respuesta IA). Sin esto, Searchgirl funciona igual.
       #   ANTHROPIC_API_KEY / ANTHROPIC_MODEL          → proveedor Anthropic
       #   LLM_BASE_URL / LLM_MODEL / LLM_API_KEY       → Ollama, OpenRouter, DeepSeek…
