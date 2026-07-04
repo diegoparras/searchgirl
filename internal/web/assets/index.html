@@ -133,7 +133,18 @@
     <img class="logo" src="/searchgirl.svg" alt="">
     <h2>Searchgirl</h2>
     <p class="login-sub">El buscador de la Suite Escriba · By SearXNG</p>
-    <a class="login-sso" href="/auth/login">Entrar con Lockatus</a>
+    <a class="login-sso hidden" id="loginSso" href="/auth/login">Entrar con Lockatus</a>
+    <form class="login-form hidden" id="loginForm" autocomplete="off">
+      <input id="loginUser" type="text" placeholder="Usuario" autocomplete="username" aria-label="Usuario">
+      <div class="pass-wrap">
+        <input id="loginPass" type="password" placeholder="Contraseña" autocomplete="current-password" aria-label="Contraseña">
+        <button class="pass-toggle" id="loginPassToggle" type="button" aria-label="Mostrar u ocultar la contraseña">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z"/><circle cx="12" cy="12" r="3"/></svg>
+        </button>
+      </div>
+      <button class="login-sso" type="submit">Entrar</button>
+      <div class="login-err" id="loginErr"></div>
+    </form>
   </div>
 </div>
 

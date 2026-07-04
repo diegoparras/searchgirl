@@ -25,7 +25,7 @@ async function init() {
   let me = null;
   try { me = await (await fetch("/auth/me")).json(); } catch { /* red caída: seguimos */ }
   if (me && me.enabled && !me.authenticated) {
-    $("#loginGate").classList.remove("hidden");
+    showLoginGate(me.mode);
     return;
   }
   if (me && me.email) {
@@ -55,6 +55,46 @@ async function init() {
   readURL();
   if (state.q) runSearch({ push: false });
   window.addEventListener("popstate", () => { readURL(); state.q ? runSearch({ push: false }) : showHome(); });
+}
+
+/* ---------- login gate ---------- */
+
+// Federado: solo el botón SSO. Local (usuario del .env): el form con ojito.
+function showLoginGate(mode) {
+  $("#loginGate").classList.remove("hidden");
+  if (mode !== "local") {
+    $("#loginSso").classList.remove("hidden");
+    return;
+  }
+  const form = $("#loginForm");
+  form.classList.remove("hidden");
+  $("#loginUser").focus();
+
+  const pass = $("#loginPass");
+  $("#loginPassToggle").addEventListener("click", () => {
+    pass.type = pass.type === "password" ? "text" : "password";
+    pass.focus();
+  });
+
+  form.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const err = $("#loginErr");
+    err.textContent = "";
+    try {
+      const r = await fetch("/auth/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ user: $("#loginUser").value.trim(), password: pass.value }),
+      });
+      if (r.ok) { location.reload(); return; }
+      const data = await r.json().catch(() => ({}));
+      err.textContent = data.error || "No se pudo iniciar sesión";
+      pass.value = "";
+      pass.focus();
+    } catch {
+      err.textContent = "No se pudo conectar con el servidor";
+    }
+  });
 }
 
 /* ---------- chrome: kebab, tema, modal ---------- */

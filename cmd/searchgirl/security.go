@@ -100,7 +100,8 @@ func (l *ipLimiter) allow(ip string, now time.Time) bool {
 
 func (l *ipLimiter) middleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if strings.HasPrefix(r.URL.Path, "/api/") || r.URL.Path == "/mcp" {
+		// /auth/login entra al límite para frenar fuerza bruta del login local.
+		if strings.HasPrefix(r.URL.Path, "/api/") || r.URL.Path == "/mcp" || r.URL.Path == "/auth/login" {
 			if !l.allow(clientIP(r), time.Now()) {
 				http.Error(w, "rate limit exceeded", http.StatusTooManyRequests)
 				return

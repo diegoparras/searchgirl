@@ -20,6 +20,14 @@ services:
     environment:
       SEARXNG_URL: http://searxng:8080
       SEARCHGIRL_DEFAULT_LANGUAGE: ${SEARCHGIRL_DEFAULT_LANGUAGE:-es}
+      # Login local opcional (pantalla de entrada estándar Escriba). Sin esto,
+      # la app abre sin login. Definilos en un .env junto a este compose:
+      #   SEARCHGIRL_USER=diego
+      #   SEARCHGIRL_PASS=una-clave-larga
+      SEARCHGIRL_USER: ${SEARCHGIRL_USER:-}
+      SEARCHGIRL_PASS: ${SEARCHGIRL_PASS:-}
+      SECRET_KEY: ${SECRET_KEY:-}
+      COOKIE_SECURE: ${COOKIE_SECURE:-0}
       # LLM opcional (modo Respuesta IA). Sin esto, Searchgirl funciona igual.
       #   ANTHROPIC_API_KEY / ANTHROPIC_MODEL          → proveedor Anthropic
       #   LLM_BASE_URL / LLM_MODEL / LLM_API_KEY       → Ollama, OpenRouter, DeepSeek…

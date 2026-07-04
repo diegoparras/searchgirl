@@ -33,7 +33,10 @@ const sessionTTL = 12 * time.Hour
 
 type Auth struct {
 	enabled      bool
-	federated    bool   // OIDC (Lockatus) active
+	federated    bool     // OIDC (Lockatus) active
+	localUser    [32]byte // sha256 of SEARCHGIRL_USER (local login, standalone only)
+	localPass    [32]byte // sha256 of SEARCHGIRL_PASS
+	local        bool
 	token        string // SEARCHGIRL_MCP_TOKEN: shared Bearer secret for programmatic clients (MCP/API)
 	secret       []byte
 	cookieSecure bool
@@ -67,19 +70,35 @@ type session struct {
 // Disabled returns an auth that gates nothing (standalone).
 func Disabled() *Auth { return &Auth{enabled: false} }
 
-// FromEnv builds auth from the environment. Two independent mechanisms,
-// either of which authorizes a protected request:
+// FromEnv builds auth from the environment. Three independent mechanisms;
+// any one of them authorizes a protected request:
 //
 //   - SEARCHGIRL_MCP_TOKEN: a shared Bearer token — the simple way to secure
 //     the MCP + API for a programmatic client on a VPS.
-//   - AUTH_MODE=federado + LOCKATUS_*: OIDC/Lockatus session cookie (the
-//     browser path). They compose: OIDC for humans, the token for machines.
+//   - SEARCHGIRL_USER + SEARCHGIRL_PASS: local login (one user, from .env)
+//     with the Escriba login card. Standalone only: in federated mode these
+//     are IGNORED — the suite contract forbids a local backdoor next to SSO.
+//   - AUTH_MODE=federado + LOCKATUS_*: OIDC/Lockatus session cookie.
 //
-// With neither set, auth is Disabled (standalone: safe only on loopback or
-// behind your own firewall).
+// Humans use local login or SSO; machines use the token. With nothing set,
+// auth is Disabled (standalone: safe only on loopback or behind a firewall).
 func FromEnv(ctx context.Context) (*Auth, error) {
 	token := os.Getenv("SEARCHGIRL_MCP_TOKEN")
 	if os.Getenv("AUTH_MODE") != "federado" {
+		user, pass := os.Getenv("SEARCHGIRL_USER"), os.Getenv("SEARCHGIRL_PASS")
+		if user != "" && pass != "" {
+			secret := []byte(os.Getenv("SECRET_KEY"))
+			if len(secret) == 0 {
+				secret = make([]byte, 32)
+				_, _ = rand.Read(secret) // ephemeral: sessions reset on restart
+			}
+			a := &Auth{
+				enabled: true, local: true, token: token,
+				localUser: sha256.Sum256([]byte(user)), localPass: sha256.Sum256([]byte(pass)),
+				secret: secret, cookieSecure: os.Getenv("COOKIE_SECURE") == "1",
+			}
+			return a, nil
+		}
 		if token == "" {
 			return Disabled(), nil
 		}
@@ -124,12 +143,43 @@ func (a *Auth) Enabled() bool { return a.enabled }
 // exist when federated.
 func (a *Auth) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/auth/me", a.handleMe)
-	if !a.enabled {
+	if a.local {
+		// Login local (solo standalone): un usuario, desde el .env. En modo
+		// federado estas rutas NO existen — sin puerta de atrás junto al SSO.
+		mux.HandleFunc("POST /auth/login", a.handleLocalLogin)
+		mux.HandleFunc("/auth/logout", a.handleLogout)
+		return
+	}
+	if !a.federated {
 		return
 	}
 	mux.HandleFunc("/auth/login", a.handleLogin)
 	mux.HandleFunc("/auth/callback", a.handleCallback)
 	mux.HandleFunc("/auth/logout", a.handleLogout)
+}
+
+// handleLocalLogin validates the single .env user in constant time and seeds
+// the same HMAC session cookie the federated flow uses.
+func (a *Auth) handleLocalLogin(w http.ResponseWriter, r *http.Request) {
+	var in struct {
+		User     string `json:"user"`
+		Password string `json:"password"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&in); err != nil {
+		http.Error(w, "bad request", http.StatusBadRequest)
+		return
+	}
+	u, p := sha256.Sum256([]byte(in.User)), sha256.Sum256([]byte(in.Password))
+	okU := subtle.ConstantTimeCompare(u[:], a.localUser[:])
+	okP := subtle.ConstantTimeCompare(p[:], a.localPass[:])
+	if okU&okP != 1 {
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
+		w.WriteHeader(http.StatusUnauthorized)
+		_, _ = w.Write([]byte(`{"error":"usuario o contraseña incorrectos"}`))
+		return
+	}
+	a.setSession(w, session{Email: in.User, Role: "admin", Exp: time.Now().Add(sessionTTL).UnixMilli()})
+	w.WriteHeader(http.StatusNoContent)
 }
 
 // Gate blocks the protected paths when auth is on and the request is
@@ -145,10 +195,10 @@ func (a *Auth) Gate(next http.Handler) http.Handler {
 	})
 }
 
-// authorized accepts either a valid OIDC session cookie (browser) or a
-// matching Bearer token (programmatic MCP client). Either is sufficient.
+// authorized accepts a valid session cookie (browser: OIDC or local login)
+// or a matching Bearer token (programmatic MCP client). Any is sufficient.
 func (a *Auth) authorized(r *http.Request) bool {
-	if a.federated && a.session(r) != nil {
+	if (a.federated || a.local) && a.session(r) != nil {
 		return true
 	}
 	return a.token != "" && a.bearerOK(r)
@@ -223,8 +273,14 @@ func (a *Auth) handleCallback(w http.ResponseWriter, r *http.Request) {
 // re-enter on its own). Re-entering is user-initiated via the button.
 func (a *Auth) handleLogout(w http.ResponseWriter, r *http.Request) {
 	a.clearSession(w)
+	// En local el login vive en la propia SPA ("/" muestra el gate); en
+	// federado, /auth/login redirige al hub.
+	back := "/auth/login"
+	if a.local {
+		back = "/"
+	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	_, _ = w.Write([]byte(sessionClosedHTML))
+	_, _ = w.Write([]byte(strings.ReplaceAll(sessionClosedHTML, "{{BACK}}", back)))
 }
 
 func (a *Auth) handleMe(w http.ResponseWriter, r *http.Request) {
@@ -233,7 +289,7 @@ func (a *Auth) handleMe(w http.ResponseWriter, r *http.Request) {
 		"mode":          a.Mode(),
 		"authenticated": !a.enabled || a.authorized(r),
 	}
-	if a.federated {
+	if a.federated || a.local {
 		if s := a.session(r); s != nil {
 			resp["email"] = s.Email
 			resp["name"] = s.Name
@@ -248,6 +304,9 @@ func (a *Auth) handleMe(w http.ResponseWriter, r *http.Request) {
 func (a *Auth) Mode() string {
 	if a.federated {
 		return "federated"
+	}
+	if a.local {
+		return "local"
 	}
 	if a.token != "" {
 		return "token"
@@ -325,5 +384,5 @@ const sessionClosedHTML = `<!doctype html>
 <img class="logo" src="/searchgirl.svg" alt="">
 <h2>Sesión cerrada</h2>
 <p class="login-sub">Cerraste sesión en Searchgirl.</p>
-<a class="login-sso" href="/auth/login">Volver a entrar</a>
+<a class="login-sso" href="{{BACK}}">Volver a entrar</a>
 </div></div></body></html>`

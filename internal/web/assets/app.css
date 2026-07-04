@@ -144,6 +144,19 @@ main { max-width: 1120px; margin: 0 auto; padding: 0 24px 72px; }
   background: var(--accent); color: var(--on-accent); font-weight: 600; font-size: 14px; text-decoration: none; cursor: pointer; border: 0; }
 .login-sso:hover { background: var(--accent-2); }
 
+/* login local (standalone): un usuario desde el .env */
+.login-form { display: flex; flex-direction: column; gap: 10px; margin-top: 16px; }
+.login-form input { width: 100%; text-align: center; }
+.login-form .login-sso { margin-top: 2px; }
+.login-err { color: var(--err); font-size: 12.5px; min-height: 16px; margin-top: 6px; }
+.pass-wrap { position: relative; }
+.pass-wrap input { width: 100%; padding-right: 40px; }
+.pass-toggle { position: absolute; right: 5px; top: 50%; transform: translateY(-50%);
+  width: 30px; height: 30px; padding: 0; border: 0; border-radius: 8px; background: transparent;
+  color: var(--muted); display: grid; place-items: center; cursor: pointer; }
+.pass-toggle:hover { color: var(--text); background: var(--card); }
+.pass-toggle svg { width: 18px; height: 18px; }
+
 /* ---- responsive ---- */
 @media (max-width: 900px) {
   .rgrid { grid-template-columns: 1fr; }

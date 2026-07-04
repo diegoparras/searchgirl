@@ -92,6 +92,78 @@ func TestSessionCookieRoundTripAndTamper(t *testing.T) {
 	}
 }
 
+func TestLocalLogin(t *testing.T) {
+	t.Setenv("AUTH_MODE", "")
+	t.Setenv("SEARCHGIRL_USER", "diego")
+	t.Setenv("SEARCHGIRL_PASS", "clave-larga-de-prueba")
+	t.Setenv("SEARCHGIRL_MCP_TOKEN", "")
+	t.Setenv("SECRET_KEY", "k")
+	a, err := FromEnv(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if a.Mode() != "local" || !a.Enabled() {
+		t.Fatalf("mode = %q", a.Mode())
+	}
+
+	mux := http.NewServeMux()
+	mux.HandleFunc("/api/ping", func(w http.ResponseWriter, r *http.Request) { _, _ = w.Write([]byte("pong")) })
+	a.RegisterRoutes(mux)
+	srv := httptest.NewServer(a.Gate(mux))
+	defer srv.Close()
+
+	// Sin sesión: la API está gateada.
+	resp, err := http.Get(srv.URL + "/api/ping")
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusUnauthorized {
+		t.Fatalf("api sin sesión = %d, want 401", resp.StatusCode)
+	}
+
+	// Credenciales malas: 401.
+	resp, err = http.Post(srv.URL+"/auth/login", "application/json", strings.NewReader(`{"user":"diego","password":"otra"}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusUnauthorized {
+		t.Fatalf("login malo = %d, want 401", resp.StatusCode)
+	}
+
+	// Credenciales correctas: cookie de sesión y API accesible.
+	resp, err = http.Post(srv.URL+"/auth/login", "application/json", strings.NewReader(`{"user":"diego","password":"clave-larga-de-prueba"}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusNoContent || len(resp.Cookies()) == 0 {
+		t.Fatalf("login ok = %d cookies=%d", resp.StatusCode, len(resp.Cookies()))
+	}
+	req, _ := http.NewRequest(http.MethodGet, srv.URL+"/api/ping", nil)
+	req.AddCookie(resp.Cookies()[0])
+	resp2, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp2.Body.Close()
+	if resp2.StatusCode != http.StatusOK {
+		t.Fatalf("api con sesión = %d, want 200", resp2.StatusCode)
+	}
+}
+
+func TestFederatedIgnoresLocalCreds(t *testing.T) {
+	// El contrato: en federado no hay login local ni aunque estén las vars.
+	t.Setenv("AUTH_MODE", "federado")
+	t.Setenv("SEARCHGIRL_USER", "diego")
+	t.Setenv("SEARCHGIRL_PASS", "x")
+	t.Setenv("LOCKATUS_ISSUER", "")
+	if _, err := FromEnv(t.Context()); err == nil {
+		t.Fatal("federado sin LOCKATUS_* debe fallar, no caer al login local")
+	}
+}
+
 func TestMeReportsMode(t *testing.T) {
 	a := &Auth{enabled: true, token: "t"}
 	rec := httptest.NewRecorder()

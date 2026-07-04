@@ -106,6 +106,7 @@ LLM_MODEL=qwen2.5:7b
 | `SEARCHGIRL_FETCH_ALLOW_PRIVATE` | `0` | Permitir IPs privadas en `url_read` (guarda SSRF) |
 | `ANTHROPIC_API_KEY` / `ANTHROPIC_MODEL` | — | Proveedor Anthropic (prioridad si está) |
 | `LLM_BASE_URL` / `LLM_MODEL` / `LLM_API_KEY` | — | Proveedor OpenAI-compatible |
+| `SEARCHGIRL_USER` / `SEARCHGIRL_PASS` | — | Login local standalone: un usuario, pantalla de entrada estándar Escriba |
 | `SEARCHGIRL_MCP_TOKEN` | — | Bearer para proteger API+MCP en un VPS (sin OIDC) |
 | `AUTH_MODE` | vacío | `federado` activa OIDC con Lockatus |
 | `LOCKATUS_ISSUER` / `LOCKATUS_CLIENT_ID` / `LOCKATUS_REDIRECT_URI` | — | Requeridas en federado |
@@ -113,11 +114,25 @@ LLM_MODEL=qwen2.5:7b
 | `COOKIE_SECURE` | `0` | `1` detrás de HTTPS |
 | `SEARCHGIRL_ALLOW_INSECURE` | `0` | Permite servir sin auth en interfaz pública (bajo tu responsabilidad) |
 
+**Login local (standalone):** para una instalación propia con pantalla de entrada, definí en
+un `.env` junto al compose:
+
+```bash
+SEARCHGIRL_USER=diego
+SEARCHGIRL_PASS=una-clave-larga
+SECRET_KEY=un-secreto-para-la-cookie   # opcional; si falta, las sesiones se reinician con el contenedor
+```
+
+Aparece el login estándar de la familia Escriba (card con ojito en la clave) y todo — UI, API,
+MCP, miniaturas — queda gateado hasta iniciar sesión. Es un único usuario, sin base de datos.
+En modo **federado estas variables se ignoran**: el contrato de la suite prohíbe un login local
+conviviendo con el SSO.
+
 **Fail-safe:** si el binario escucha en una interfaz no-loopback sin ninguna auth, se niega a
 arrancar (un buscador abierto es un proxy gratis para cualquiera). Docker publica el puerto
 desde la red interna, así que el compose de este repo ya arranca bien; en un VPS usá
-`SEARCHGIRL_MCP_TOKEN`, federación, o `SEARCHGIRL_ALLOW_INSECURE=1` si el puerto ya está
-firewalleado.
+`SEARCHGIRL_USER`+`SEARCHGIRL_PASS`, `SEARCHGIRL_MCP_TOKEN`, federación, o
+`SEARCHGIRL_ALLOW_INSECURE=1` si el puerto ya está firewalleado.
 
 ## Modo suite (federado con Lockatus)
 
