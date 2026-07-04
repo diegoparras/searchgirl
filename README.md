@@ -143,10 +143,10 @@ El acceso se gobierna desde la matriz del hub (roles `admin`/`usuario`). El seed
 
 ## Deploy en paneles
 
-Funciona igual en **Dokploy**, **Easypanel**, **Coolify** o **Portainer**: pegá el
-`docker-compose.yml` de este repo, seteá `SEARXNG_SECRET` (y `COOKIE_SECURE=1` si el panel te
-da HTTPS) y publicá el puerto 8089. Con dominio propio: poné el reverse proxy del panel
-delante y listo.
+Guía punta a punta para **Easypanel** (servicios, mounts, dominio, HTTPS, troubleshooting) en
+[DEPLOY.md](DEPLOY.md). **Dokploy**, **Coolify** y **Portainer**: pegá el `docker-compose.yml`
+de este repo, seteá `SEARXNG_SECRET` (y `COOKIE_SECURE=1` si el panel te da HTTPS) y publicá
+el puerto 8089 detrás del reverse proxy del panel.
 
 ## SearXNG por dentro
 
