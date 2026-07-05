@@ -211,6 +211,39 @@ func TestFederatedServesLoginCard(t *testing.T) {
 	}
 }
 
+func TestBearerFallsBackToVerifier(t *testing.T) {
+	// Sin tokens de env, pero con un verifier (los emitidos desde la UI):
+	// un Bearer válido según el verifier autoriza las rutas protegidas.
+	a := &Auth{enabled: true}
+	a.SetVerifier(func(secret string) (string, bool) {
+		return "claude", secret == "sg_valido"
+	})
+	srv := httptest.NewServer(a.Gate(okHandler()))
+	defer srv.Close()
+
+	// Sin token → 401.
+	resp, _ := http.Get(srv.URL + "/api/search")
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusUnauthorized {
+		t.Fatalf("sin token = %d, want 401", resp.StatusCode)
+	}
+	// Con el Bearer que el verifier acepta → 200.
+	req, _ := http.NewRequest(http.MethodGet, srv.URL+"/api/search", nil)
+	req.Header.Set("Authorization", "Bearer sg_valido")
+	r2, _ := http.DefaultClient.Do(req)
+	r2.Body.Close()
+	if r2.StatusCode != http.StatusOK {
+		t.Errorf("bearer del verifier = %d, want 200", r2.StatusCode)
+	}
+	// Un Bearer que el verifier rechaza → 401.
+	req.Header.Set("Authorization", "Bearer sg_otro")
+	r3, _ := http.DefaultClient.Do(req)
+	r3.Body.Close()
+	if r3.StatusCode != http.StatusUnauthorized {
+		t.Errorf("bearer inválido = %d, want 401", r3.StatusCode)
+	}
+}
+
 func TestIsAdmin(t *testing.T) {
 	// Standalone abierto (sin auth): tu instancia → admin.
 	if !Disabled().IsAdmin(httptest.NewRequest(http.MethodGet, "/", nil)) {

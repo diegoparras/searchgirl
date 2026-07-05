@@ -44,9 +44,17 @@ type Auth struct {
 	oauth2   oauth2.Config
 	verifier *oidc.IDTokenVerifier
 
+	// verify checks a Bearer secret against tokens issued from the UI (the
+	// token store). Set via SetVerifier; complements the env tokens above.
+	verify func(secret string) (label string, ok bool)
+
 	mu    sync.Mutex
 	flows map[string]flow // login state -> PKCE verifier + nonce
 }
+
+// SetVerifier wires an extra Bearer verifier (the UI-issued token store), so
+// tokens created from the panel authorize just like the env ones.
+func (a *Auth) SetVerifier(f func(secret string) (string, bool)) { a.verify = f }
 
 type flow struct {
 	verifier string
@@ -280,17 +288,25 @@ func (a *Auth) authorized(r *http.Request) bool {
 func (a *Auth) bearerToken(r *http.Request) (string, bool) {
 	const p = "Bearer "
 	h := r.Header.Get("Authorization")
-	if len(a.tokens) == 0 || !strings.HasPrefix(h, p) {
+	if !strings.HasPrefix(h, p) {
 		return "", false
 	}
-	got := sha256.Sum256([]byte(strings.TrimSpace(h[len(p):])))
+	secret := strings.TrimSpace(h[len(p):])
+	got := sha256.Sum256([]byte(secret))
 	name, matched := "", false
-	for _, t := range a.tokens { // sin corte temprano: se comparan todos
+	for _, t := range a.tokens { // env tokens, sin corte temprano
 		if subtle.ConstantTimeCompare(got[:], t.hash[:]) == 1 {
 			name, matched = t.name, true
 		}
 	}
-	return name, matched
+	if matched {
+		return name, true
+	}
+	// Los emitidos desde la UI (token store), si hay verifier configurado.
+	if a.verify != nil {
+		return a.verify(secret)
+	}
+	return "", false
 }
 
 // protected covers everything that spends resources or reaches the network on

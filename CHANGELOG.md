@@ -2,6 +2,12 @@
 
 Formato basado en [Keep a Changelog](https://keepachangelog.com/es/1.1.0/); versionado [SemVer](https://semver.org/lang/es/).
 
+## [0.6.0] — 2026-07-05
+
+### Añadido
+- **Panel "Conexión · API y MCP" en la UI** (solo admin): emitir/revocar tokens Bearer para conectar apps y agentes (Claude Code, n8n, scripts) a la API y al servidor MCP. Muestra la URL del /mcp y de la API, la lista de tokens (etiqueta, creado, vence, revocar), un formulario con etiqueta + expiración (no vence / 30 / 90 / 365 días), y al emitir muestra el secreto una sola vez + el JSON de .mcp.json + el comando `claude mcp add`, cada uno con botón copiar.
+- Token store persistente (`internal/tokens`) en el volumen /config (`tokens.json`, guarda solo el hash sha256, nunca el secreto). Los tokens emitidos desde la UI conviven con los de `SEARCHGIRL_MCP_TOKEN` (env): auth valida contra ambos vía un verifier. Sin volumen, viven en memoria hasta reiniciar.
+
 ## [0.5.2] — 2026-07-05
 
 ### Cambiado

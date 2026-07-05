@@ -50,10 +50,12 @@ async function init() {
     $("#aiBtn").classList.remove("hidden");
     $("#aiBtn").addEventListener("click", runAnswer);
   }
-  // El panel "Modelo IA" solo lo ve un admin (o standalone en loopback).
+  // Los paneles de admin (Modelo IA, Conexión) solo los ve un admin.
   if (config.llm && config.llm.can_configure) {
     $("#settingsBtn").classList.remove("hidden");
     wireSettings();
+    $("#connBtn").classList.remove("hidden");
+    wireConn();
   }
 
   // Estado desde la URL (compartible / botón atrás).
@@ -109,7 +111,7 @@ function wireChrome() {
   kebab.addEventListener("click", (e) => { e.stopPropagation(); menu.classList.toggle("hidden"); });
   document.addEventListener("click", (e) => { if (!menu.contains(e.target)) menu.classList.add("hidden"); });
   document.addEventListener("keydown", (e) => {
-    if (e.key === "Escape") { menu.classList.add("hidden"); $("#aboutModal").classList.add("hidden"); $("#settingsModal").classList.add("hidden"); }
+    if (e.key === "Escape") { menu.classList.add("hidden"); $("#aboutModal").classList.add("hidden"); $("#settingsModal").classList.add("hidden"); $("#connModal").classList.add("hidden"); }
   });
 
   const toggle = $("#themeToggle");
@@ -594,6 +596,123 @@ async function loadModels() {
   sel.classList.remove("hidden");
   hint.className = "model-hint ok";
   hint.textContent = r.count + " modelos" + (rec.length ? " · recomendados: " + rec.slice(0, 3).map((mo) => mo.id).join(", ") : "");
+}
+
+/* ---------- panel Conexión · API y MCP (solo admin) ---------- */
+
+function wireConn() {
+  const m = $("#connModal");
+  $("#connBtn").addEventListener("click", openConn);
+  $("#connClose").addEventListener("click", () => m.classList.add("hidden"));
+  m.addEventListener("click", (e) => { if (e.target === m) m.classList.add("hidden"); });
+  $("#tkIssue").addEventListener("click", issueToken);
+  // Copiar de cualquier botón con data-copy (URLs).
+  m.addEventListener("click", (e) => {
+    const btn = e.target.closest("[data-copy]");
+    if (btn) copyText($("#" + btn.dataset.copy).textContent, btn);
+  });
+}
+
+async function openConn() {
+  $("#menu").classList.add("hidden");
+  const base = location.origin;
+  $("#connMcpUrl").textContent = base + "/mcp";
+  $("#connApiUrl").textContent = base + "/api/search?q=...";
+  $("#tkReveal").classList.add("hidden");
+  $("#tkReveal").replaceChildren();
+  $("#tkLabel").value = "";
+  await loadTokens();
+  $("#connModal").classList.remove("hidden");
+}
+
+async function loadTokens() {
+  const list = $("#tkList");
+  list.replaceChildren();
+  let data = { tokens: [], persisted: true };
+  try { data = await (await fetch("/api/tokens")).json(); } catch { /* noop */ }
+  for (const t of (data.tokens || [])) {
+    const row = el("div", "tk-item");
+    const info = el("span");
+    info.append(el("span", "tk-lbl", t.label));
+    let meta = " · creado " + t.created;
+    if (t.expires) meta += " · vence " + t.expires;
+    if (t.last_used) meta += " · usado " + t.last_used;
+    info.append(el("span", "tk-meta", meta));
+    const revoke = el("button", "mini ghost tk-revoke", "revocar");
+    revoke.addEventListener("click", () => revokeToken(t.id));
+    row.append(info, el("span", "sp"), revoke);
+    list.appendChild(row);
+  }
+  if (data.persisted === false) {
+    const w = el("div", "tk-meta", "Sin volumen /config: los tokens no persisten tras reiniciar.");
+    list.appendChild(w);
+  }
+}
+
+async function issueToken() {
+  const label = $("#tkLabel").value.trim();
+  const expires = parseInt($("#tkExpires").value, 10) || 0;
+  const btn = $("#tkIssue");
+  btn.disabled = true;
+  let r;
+  try {
+    r = await (await fetch("/api/tokens", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ label, expires_days: expires }) })).json();
+  } catch (e) { btn.disabled = false; return; }
+  btn.disabled = false;
+  if (!r.ok) return;
+
+  // Mostrar el secreto UNA vez + la config MCP lista para copiar.
+  const base = location.origin;
+  const cfg = JSON.stringify({ mcpServers: { searchgirl: { type: "http", url: base + "/mcp", headers: { Authorization: "Bearer " + r.token } } } }, null, 2);
+  const cmd = `claude mcp add --transport http searchgirl ${base}/mcp --header "Authorization: Bearer ${r.token}"`;
+
+  const rev = $("#tkReveal");
+  rev.replaceChildren();
+  rev.append(el("div", "tk-reveal-lbl", "Copiá este token ahora — no se vuelve a mostrar:"));
+  rev.appendChild(tkRow(r.token));
+  rev.append(el("div", "tk-reveal-lbl", "Config para el .mcp.json de Claude Code / Desktop:"));
+  rev.appendChild(preCopy(cfg));
+  rev.append(el("div", "tk-reveal-lbl", "…o el comando de Claude Code:"));
+  rev.appendChild(preCopy(cmd));
+  rev.classList.remove("hidden");
+
+  $("#tkLabel").value = "";
+  await loadTokens();
+}
+
+async function revokeToken(id) {
+  try { await fetch("/api/tokens?id=" + encodeURIComponent(id), { method: "DELETE" }); } catch { /* noop */ }
+  await loadTokens();
+}
+
+// tkRow: una línea con un valor en <code> y botón copiar.
+function tkRow(value) {
+  const row = el("div", "tk-row");
+  const code = el("code", null, value);
+  const btn = el("button", "mini ghost", "copiar");
+  btn.addEventListener("click", () => copyText(value, btn));
+  row.append(code, btn);
+  return row;
+}
+
+// preCopy: un bloque <pre> con botón copiar.
+function preCopy(value) {
+  const wrap = el("div");
+  const pre = el("pre", "tk-cfg", value);
+  const btn = el("button", "mini ghost", "copiar");
+  btn.style.marginTop = "6px";
+  btn.addEventListener("click", () => copyText(value, btn));
+  wrap.append(pre, btn);
+  return wrap;
+}
+
+function copyText(text, btn) {
+  navigator.clipboard.writeText(text).then(() => {
+    if (!btn) return;
+    const prev = btn.textContent;
+    btn.textContent = "copiado ✓";
+    setTimeout(() => { btn.textContent = prev; }, 1400);
+  }).catch(() => { /* clipboard bloqueado: sin feedback */ });
 }
 
 /* ---------- util ---------- */

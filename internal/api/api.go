@@ -17,13 +17,15 @@ import (
 	"github.com/diegoparras/searchgirl/internal/fetch"
 	"github.com/diegoparras/searchgirl/internal/llm"
 	"github.com/diegoparras/searchgirl/internal/search"
+	"github.com/diegoparras/searchgirl/internal/tokens"
 )
 
 type Server struct {
 	Search  *search.Service
 	Reader  *fetch.Reader
 	Answer  *answer.Engine
-	Store   *llm.Store // runtime-switchable LLM config (settings panel)
+	Store   *llm.Store    // runtime-switchable LLM config (settings panel)
+	Tokens  *tokens.Store // UI-issued Bearer tokens (Conexión MCP panel)
 	Version string
 
 	// AuthMode, LLM info and IsAdmin are injected by cmd/serve so this package
@@ -59,6 +61,11 @@ func (s *Server) Mount(mux *http.ServeMux) {
 		mux.HandleFunc("POST /api/settings", s.handleSettings)
 		mux.HandleFunc("POST /api/settings/test", s.handleTestLLM)
 		mux.HandleFunc("POST /api/settings/models", s.handleModels)
+	}
+	if s.Tokens != nil {
+		mux.HandleFunc("GET /api/tokens", s.handleTokens)
+		mux.HandleFunc("POST /api/tokens", s.handleTokens)
+		mux.HandleFunc("DELETE /api/tokens", s.handleTokens)
 	}
 }
 

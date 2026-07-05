@@ -181,6 +181,35 @@ main { max-width: 1120px; margin: 0 auto; padding: 0 24px 72px; }
 .set-status.ok { color: var(--ok); }
 .set-status.bad { color: var(--err); }
 
+/* ---- modal Conexión · API y MCP ---- */
+.conn-card { width: min(520px, 94vw); }
+.conn-url { display: flex; gap: 8px; align-items: center; }
+.conn-url code { flex: 1; min-width: 0; overflow-x: auto; white-space: nowrap; font-family: var(--mono);
+  font-size: 12.5px; background: var(--card-2); border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px; color: var(--text); }
+.tk-form-lbl { font-size: 12px; color: var(--muted); font-weight: 600; margin: 16px 0 6px; }
+.tk-list { display: flex; flex-direction: column; gap: 6px; }
+.tk-list:empty::after { content: "Todavía no emitiste tokens."; color: var(--muted); font-size: 12.5px; }
+.tk-item { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border: 1px solid var(--border);
+  border-radius: 9px; background: var(--card-2); font-size: 13px; }
+.tk-item .tk-lbl { font-weight: 600; }
+.tk-item .tk-meta { color: var(--muted); font-size: 11.5px; }
+.tk-item .sp { flex: 1; }
+.tk-item .tk-revoke { color: var(--err); border-color: var(--border); }
+.tk-item .tk-revoke:hover { background: var(--err); color: #fff; border-color: var(--err); }
+.tk-form { margin-top: 14px; }
+.tk-form > input { width: 100%; margin-bottom: 8px; }
+.tk-form-row { display: flex; gap: 8px; }
+.tk-form-row select { flex: 0 0 auto; }
+.tk-form-row button { flex: 1; }
+.tk-reveal { margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--hairline); }
+.tk-reveal-lbl { font-size: 12px; color: var(--muted); margin: 10px 0 5px; }
+.tk-reveal-lbl:first-child { margin-top: 0; }
+.tk-row { display: flex; gap: 8px; align-items: center; }
+.tk-row code { flex: 1; min-width: 0; overflow-x: auto; white-space: nowrap; font-family: var(--mono);
+  font-size: 12.5px; background: var(--card-2); border: 1px solid var(--accent); border-radius: 8px; padding: 8px 10px; color: var(--accent-ink); }
+pre.tk-cfg { margin: 0; font-family: var(--mono); font-size: 11.5px; line-height: 1.5; background: var(--card-2);
+  border: 1px solid var(--border); border-radius: 9px; padding: 10px 12px; overflow-x: auto; color: var(--text); }
+
 /* ---- responsive ---- */
 @media (max-width: 900px) {
   .rgrid { grid-template-columns: 1fr; }

@@ -15,6 +15,7 @@ import (
 	"github.com/diegoparras/searchgirl/internal/llm"
 	"github.com/diegoparras/searchgirl/internal/mcpsrv"
 	"github.com/diegoparras/searchgirl/internal/search"
+	"github.com/diegoparras/searchgirl/internal/tokens"
 	"github.com/diegoparras/searchgirl/internal/web"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
@@ -43,6 +44,10 @@ func cmdServe(args []string) error {
 	if err != nil {
 		return err
 	}
+	// Tokens emitidos desde la UI (panel Conexión MCP): conviven con los de
+	// env. auth los valida vía el verifier.
+	tokStore := tokens.New(os.Getenv("SEARCHGIRL_CONFIG_DIR"))
+	authn.SetVerifier(tokStore.Verify)
 	// Fail-safe: nunca poner un buscador/proxy sin auth en una interfaz pública.
 	if err := checkExposure(*httpAddr, authn); err != nil {
 		return err
@@ -56,6 +61,7 @@ func cmdServe(args []string) error {
 	apiSrv.Reader = reader
 	apiSrv.Answer = ans
 	apiSrv.Store = store
+	apiSrv.Tokens = tokStore
 	apiSrv.IsAdmin = authn.IsAdmin
 	apiSrv.LLMAvailable = store.Available
 	apiSrv.LLMModel = store.Name
