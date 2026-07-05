@@ -2,6 +2,13 @@
 
 Formato basado en [Keep a Changelog](https://keepachangelog.com/es/1.1.0/); versionado [SemVer](https://semver.org/lang/es/).
 
+## [0.4.1] — 2026-07-05
+
+Ronda dinámica de auditoría (instancia viva) sobre v0.4.0: DAST (nuclei, 0 hallazgos en 1160 templates), carga (k6, p95 37ms bajo 30 VUs, rate limiter activo), mutation testing (gremlins en `internal/searx`, 70% de eficacia) y accesibilidad (axe WCAG 2.2 AA).
+
+### Corregido
+- Contraste de color (WCAG 2.2 AA): los títulos de resultados y los links de acento sobre fondo claro usaban el fucsia `#d6336c` (4.42:1, por debajo del 4.5 requerido) y el texto de motores tenía `opacity` que lo aclaraba. Se introdujo el token `--accent-ink` (fucsia oscurecido para texto sobre claro; acento normal en oscuro) y se quitó la opacity. Home y resultados quedan en 0 violaciones AA en claro y oscuro.
+
 ## [0.4.0] — 2026-07-04
 
 Endurecimiento tras auditoría de seguridad multidimensional (0 hallazgos críticos; remediación de 1 alto + 5 medios + varios bajos).

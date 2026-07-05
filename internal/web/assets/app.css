@@ -2,8 +2,16 @@
    SEARCHGIRL — lo ÚNICO propio sobre el canónico: el acento (fucsia ácido) y
    las vistas de búsqueda. Todo lo demás viene de escriba-ui.css.
    ============================================================================ */
-:root { --accent:#d6336c; --accent-2:#b02857; --on-accent:#fff; --ring:0 0 0 3px rgba(214,51,108,.20); }
-:root[data-theme="dark"] { --accent:#e85d8a; --accent-2:#d6336c; --ring:0 0 0 3px rgba(232,93,138,.26); }
+:root { --accent:#d6336c; --accent-2:#b02857; --on-accent:#fff; --ring:0 0 0 3px rgba(214,51,108,.20);
+  /* fucsia como TEXTO sobre fondo claro: oscurecido para pasar WCAG AA (4.5:1). */
+  --accent-ink:#b02857; }
+:root[data-theme="dark"] { --accent:#e85d8a; --accent-2:#d6336c; --ring:0 0 0 3px rgba(232,93,138,.26);
+  /* en oscuro el acento ya contrasta sobre el fondo, se usa tal cual. */
+  --accent-ink:#e85d8a; }
+
+/* El acento vale como texto-link solo sobre fondo claro con contraste bajo;
+   acá lo redirigimos al tono con contraste AA. No toca botones ni bordes. */
+a.link { color: var(--accent-ink); }
 
 main { max-width: 1120px; margin: 0 auto; padding: 0 24px 72px; }
 
@@ -56,9 +64,9 @@ main { max-width: 1120px; margin: 0 auto; padding: 0 24px 72px; }
 .rlist { display: flex; flex-direction: column; gap: 18px; }
 .rit { max-width: 640px; }
 .rit-dom { font-size: 12px; color: var(--muted); display: flex; align-items: center; gap: 6px; }
-.rit-dom .eng { color: var(--muted); opacity: .8; }
+.rit-dom .eng { color: var(--muted); }
 .rit-tit { display: inline-block; font-size: 16px; font-weight: 600; letter-spacing: -.015em;
-  color: var(--accent); text-decoration: none; margin: 2px 0; line-height: 1.35; }
+  color: var(--accent-ink); text-decoration: none; margin: 2px 0; line-height: 1.35; }
 .rit-tit:hover { text-decoration: underline; }
 .rit-snip { color: var(--muted-2); font-size: 13.5px; line-height: 1.55; margin: 0; overflow-wrap: anywhere; }
 .rit-date { color: var(--muted); font-size: 12px; margin-right: 6px; font-variant-numeric: tabular-nums; }
@@ -83,8 +91,7 @@ main { max-width: 1120px; margin: 0 auto; padding: 0 24px 72px; }
 .side-card h3 { margin: 0 0 8px; font-size: 14.5px; font-weight: 600; letter-spacing: -.015em; }
 .side-card p { margin: 0; font-size: 13px; color: var(--muted-2); line-height: 1.55; overflow-wrap: anywhere; }
 .side-kicker { font-size: 10.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .14em;
-  color: var(--accent); margin-bottom: 6px; }
-:root[data-theme="dark"] .side-kicker { color: var(--accent); }
+  color: var(--accent-ink); margin-bottom: 6px; }
 .ib-rows { display: grid; grid-template-columns: auto 1fr; gap: 4px 12px; margin: 10px 0 0; font-size: 12.5px; }
 .ib-rows dt { color: var(--muted); }
 .ib-rows dd { margin: 0; color: var(--text); overflow-wrap: anywhere; }
@@ -103,7 +110,7 @@ main { max-width: 1120px; margin: 0 auto; padding: 0 24px 72px; }
 .ai-body p { margin: 0 0 10px; }
 .ai-body p:last-child { margin-bottom: 0; }
 .ai-cite { font-size: 11px; vertical-align: super; line-height: 0; text-decoration: none;
-  color: var(--accent); font-weight: 600; padding: 0 1px; }
+  color: var(--accent-ink); font-weight: 600; padding: 0 1px; }
 .ai-cite:hover { text-decoration: underline; }
 .ai-srcs { margin: 14px 0 0; padding-top: 12px; border-top: 1px solid var(--hairline);
   display: flex; flex-direction: column; gap: 5px; }
