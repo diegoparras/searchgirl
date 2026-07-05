@@ -136,8 +136,106 @@ cuando quieras su imagen nueva. Cero estado que migrar: Searchgirl no tiene base
   ```
   y un Caddy/nginx adelante para TLS (después: `COOKIE_SECURE=1` en `.env` y `docker compose up -d`).
 
-## Modo suite (federado)
+## Federación con Lockatus en Easypanel
 
-Si ya corrés la Suite Escriba con Lockatus, no uses esta guía: Searchgirl entra por el
-`docker-compose.suite.yml` de la suite con `AUTH_MODE=federado` (SSO, sin login local). Ver
-sección "Modo suite" del [README](README.md).
+En vez del login local del paso 3, Searchgirl puede usar **SSO con Lockatus** (login único de
+la Suite Escriba). En producción es incluso más simple que en local: cada servicio tiene su
+dominio HTTPS real, así que no hace falta el truco de `host.docker.internal` — la URL pública
+de Lockatus resuelve igual desde el navegador (front-channel) y desde el contenedor de
+Searchgirl (back-channel, para validar los tokens).
+
+### Prerequisito: Lockatus accesible por HTTPS
+
+Lockatus tiene que estar desplegado con su propio dominio (p.ej. `https://auth.tu-dominio.com`),
+su Postgres, y `LOCKATUS_ISSUER` = ese mismo dominio público. Ver el `DEPLOY.md` de Lockatus
+(imagen `ghcr.io/diegoparras/lockatus:latest`). **Ese dominio es el que va en `LOCKATUS_ISSUER`
+de Searchgirl** — sin `https` accesible no hay federación.
+
+### 1. Registrar Searchgirl como cliente en Lockatus
+
+En el admin de Lockatus (o por API), declará la app y su redirect_uri **exacto**:
+
+- **slug**: `searchgirl`
+- **redirect_uri**: `https://buscar.tu-dominio.com/auth/callback` (tu dominio de Searchgirl + `/auth/callback`)
+- **roles**: `admin`, `usuario`
+
+Por API (con la cookie de admin del hub):
+```bash
+curl -X PUT https://auth.tu-dominio.com/api/admin/apps/searchgirl \
+  -H "Content-Type: application/json" -b cookies.txt \
+  -d '{"name":"Searchgirl","roles":["admin","usuario"],
+       "redirect_uris":["https://buscar.tu-dominio.com/auth/callback"]}'
+```
+Después, **asignale un rol** a tu usuario para la app `searchgirl` en la matriz de accesos del
+hub (sin rol = `access_denied` al entrar).
+
+### 2. Servicio `app` con `AUTH_MODE=federado`
+
+Igual que el paso 3 de arriba, pero cambiás el bloque de auth. **No pongas `SEARCHGIRL_USER`/
+`SEARCHGIRL_PASS`** — en federado se ignoran (el contrato de la suite prohíbe login local junto
+al SSO):
+
+```
+SEARXNG_URL=http://searchgirl_searxng:8080
+SEARCHGIRL_DEFAULT_LANGUAGE=es
+
+# Federación Lockatus (cliente público + PKCE, sin secret):
+AUTH_MODE=federado
+LOCKATUS_ISSUER=https://auth.tu-dominio.com
+LOCKATUS_CLIENT_ID=searchgirl
+LOCKATUS_REDIRECT_URI=https://buscar.tu-dominio.com/auth/callback
+SECRET_KEY=<64 hex al azar>            # firma la cookie de sesión local
+COOKIE_SECURE=1                        # HTTPS del panel
+SEARCHGIRL_TRUSTED_PROXIES=172.16.0.0/12
+
+# Opcional — Respuesta IA (ver más abajo), y token Bearer para agentes:
+# LLM_BASE_URL=... / ANTHROPIC_API_KEY=... / SEARCHGIRL_MCP_TOKEN=claude:<token>
+```
+
+El token Bearer (`SEARCHGIRL_MCP_TOKEN`) **compone** con la federación: los humanos entran por
+Lockatus, los agentes (MCP/API) usan el token. Útil para conectar Claude Code sin pasar por SSO.
+
+### 3. Verificar el SSO
+
+```bash
+curl https://buscar.tu-dominio.com/auth/me     # → {"mode":"federated","authenticated":false,...}
+```
+En el navegador: la card de login muestra **solo** "Entrar con Lockatus" → te lleva al hub →
+volvés autenticado. `/auth/me` pasa a `authenticated:true` con tu email y rol.
+
+> **El `redirect_uri` debe coincidir carácter por carácter** en tres lugares: el registro en
+> Lockatus, la env `LOCKATUS_REDIRECT_URI`, y el dominio real de Searchgirl. Un `/` de más o
+> `http` vs `https` = `redirect_uri mismatch`.
+
+---
+
+## Respuesta IA: OpenRouter u Ollama
+
+El modo "Respuesta IA" (síntesis con citas) es opcional. Con lo que tenés:
+
+- **OpenRouter (recomendado en Easypanel)** — es una API remota, funciona directo desde el
+  contenedor sin exponer nada. En el servicio `app`:
+  ```
+  LLM_BASE_URL=https://openrouter.ai/api/v1
+  LLM_MODEL=deepseek/deepseek-chat        # o el modelo que prefieras
+  LLM_API_KEY=sk-or-...
+  LLM_REFERER=https://buscar.tu-dominio.com   # atribución de app (opcional)
+  ```
+- **Ollama** — solo si corre accesible desde el contenedor. Si Ollama está en el **mismo VPS**
+  (fuera de Docker), agregá en el servicio `app` el host del gateway y apuntá ahí:
+  ```
+  LLM_BASE_URL=http://172.17.0.1:11434/v1     # gateway Docker → host; o la IP del VPS
+  LLM_MODEL=qwen2.5:7b
+  ```
+  Asegurate de que Ollama escuche en `0.0.0.0` (`OLLAMA_HOST=0.0.0.0`) y que el firewall
+  permita el puerto 11434 desde la red Docker. En la nube, OpenRouter suele ser menos frágil.
+
+Sin ninguno de los dos, Searchgirl anda igual — solo no aparece el botón Respuesta IA.
+
+---
+
+## Modo suite local (docker-compose)
+
+Si corrés toda la Suite Escriba en una máquina, no uses esta guía: Searchgirl ya entra por el
+`docker-compose.suite.yml` con `AUTH_MODE=federado` contra el Lockatus local
+(`host.docker.internal:8081`). Ver la sección "Modo suite" del [README](README.md).
