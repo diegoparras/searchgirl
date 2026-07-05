@@ -1,6 +1,10 @@
 package searx
 
-import "testing"
+import (
+	"encoding/json"
+	"strings"
+	"testing"
+)
 
 func TestCanonicalURL(t *testing.T) {
 	cases := []struct {
@@ -65,6 +69,33 @@ func TestNormalizeEmptyPayload(t *testing.T) {
 	}
 	if resp.Query != "x" {
 		t.Errorf("query fallback = %q", resp.Query)
+	}
+}
+
+func TestCloneKeepsEmptySlicesNonNil(t *testing.T) {
+	// Regresión: Clone() con base nil colapsaba los slices vacíos a nil, que
+	// serializa como "null" y rompía a la UI (for...of sobre null). El path
+	// real de búsqueda SIEMPRE pasa por Clone (caché), así que se testea acá.
+	orig := normalize(&rawResponse{}, Params{Query: "x", Category: "general"})
+	cl := orig.Clone()
+	for name, s := range map[string][]string{
+		"answers": cl.Answers, "suggestions": cl.Suggestions,
+		"corrections": cl.Corrections, "engines_failed": cl.Meta.EnginesFailed,
+	} {
+		if s == nil {
+			t.Errorf("Clone().%s es nil; debe ser [] para serializar como array", name)
+		}
+	}
+	if cl.Results == nil || cl.Infoboxes == nil {
+		t.Error("Clone(): results/infoboxes no deben ser nil")
+	}
+
+	// Y debe serializar como [] en JSON, no null.
+	b, _ := json.Marshal(cl)
+	for _, k := range []string{`"answers":[]`, `"results":[]`, `"infoboxes":[]`, `"suggestions":[]`, `"corrections":[]`} {
+		if !strings.Contains(string(b), k) {
+			t.Errorf("JSON del Clone no contiene %s:\n%s", k, b)
+		}
 	}
 }
 

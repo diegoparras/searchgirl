@@ -70,12 +70,15 @@ const maxSnippet = 320
 // Results a max_results).
 func (r *Response) Clone() *Response {
 	out := *r
-	out.Results = append([]Result(nil), r.Results...)
-	out.Answers = append([]string(nil), r.Answers...)
-	out.Infoboxes = append([]Infobox(nil), r.Infoboxes...)
-	out.Suggestions = append([]string(nil), r.Suggestions...)
-	out.Corrections = append([]string(nil), r.Corrections...)
-	out.Meta.EnginesFailed = append([]string(nil), r.Meta.EnginesFailed...)
+	// Base []T{} (no nil): así un slice vacío se preserva como [] y no colapsa
+	// a nil — que serializaría como "null" y rompería a los consumidores que
+	// iteran (la UI hacía for...of sobre answers/results).
+	out.Results = append([]Result{}, r.Results...)
+	out.Answers = append([]string{}, r.Answers...)
+	out.Infoboxes = append([]Infobox{}, r.Infoboxes...)
+	out.Suggestions = append([]string{}, r.Suggestions...)
+	out.Corrections = append([]string{}, r.Corrections...)
+	out.Meta.EnginesFailed = append([]string{}, r.Meta.EnginesFailed...)
 	return &out
 }
 

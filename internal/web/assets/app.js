@@ -238,13 +238,17 @@ function render(data, append) {
   list.className = "rlist" + (grid ? " grid" : "");
   if (!append) list.replaceChildren();
 
-  for (const res of data.results) list.appendChild(grid ? cardOf(res) : itemOf(res));
+  // Blindaje: un shape inesperado en cualquier lista del backend no debe
+  // tumbar toda la búsqueda (degradación elegante).
+  const results = arr(data.results);
+  for (const res of results) list.appendChild(grid ? cardOf(res) : itemOf(res));
 
-  const none = !append && data.results.length === 0;
+  const none = !append && results.length === 0;
   $("#rEmpty").classList.toggle("hidden", !none);
-  $("#moreBtn").classList.toggle("hidden", data.results.length === 0);
+  $("#moreBtn").classList.toggle("hidden", results.length === 0);
 
-  const stats = [`${data.meta.total} resultados`, `${data.meta.took_ms} ms`];
+  const meta = data.meta || {};
+  const stats = [`${meta.total || 0} resultados`, `${meta.took_ms || 0} ms`];
   $("#rStats").textContent = stats.join(" · ");
 
   if (!append) {
@@ -286,12 +290,12 @@ function cardOf(res) {
 function renderSide(data) {
   const side = $("#rSide");
   side.replaceChildren();
-  for (const ans of data.answers) {
+  for (const ans of arr(data.answers)) {
     const c = el("div", "side-card");
     c.append(el("div", "side-kicker", "Respuesta directa"), el("p", "", ans));
     side.appendChild(c);
   }
-  for (const ib of data.infoboxes) {
+  for (const ib of arr(data.infoboxes)) {
     const c = el("div", "side-card");
     c.append(el("div", "side-kicker", "Infobox"));
     if (ib.title) c.append(el("h3", "", ib.title));
@@ -337,7 +341,7 @@ function renderFoot(data) {
   const foot = $("#rFoot");
   foot.replaceChildren();
   let engines = new Set();
-  for (const r of data.results) (r.engines || []).forEach((e) => engines.add(e));
+  for (const r of arr(data.results)) arr(r.engines).forEach((e) => engines.add(e));
   const parts = [`Resultados vía SearXNG · ${engines.size} motores`];
   if (data.meta.engines_failed && data.meta.engines_failed.length) {
     parts.push(`sin respuesta: ${data.meta.engines_failed.join(", ")}`);
@@ -492,5 +496,9 @@ function el(tag, cls, text) {
   if (text !== undefined) n.textContent = text;
   return n;
 }
+
+// arr coacciona cualquier valor a un array iterable: si el backend devuelve
+// null/objeto/undefined en una lista, la vista degrada en vez de romperse.
+function arr(v) { return Array.isArray(v) ? v : []; }
 
 init();

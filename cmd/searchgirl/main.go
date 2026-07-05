@@ -8,7 +8,7 @@ import (
 	"os"
 )
 
-const version = "0.4.1"
+const version = "0.4.2"
 
 func main() {
 	// No arguments = serve. "Fácil de usar" starts here.

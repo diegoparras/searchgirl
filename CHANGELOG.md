@@ -2,6 +2,12 @@
 
 Formato basado en [Keep a Changelog](https://keepachangelog.com/es/1.1.0/); versionado [SemVer](https://semver.org/lang/es/).
 
+## [0.4.2] — 2026-07-05
+
+### Corregido
+- **Bug de raíz**: `Response.Clone()` (usado por la caché en cada búsqueda) construía los slices con base `nil`, así que un `answers`/`infoboxes`/`corrections` vacío colapsaba a `nil` y serializaba como `null` en el JSON. La UI hacía `for...of` sobre eso y fallaba con "answers is not iterable" en búsquedas sin respuestas directas. Ahora `Clone()` usa base `[]T{}` y preserva los arrays vacíos como `[]`. Test de regresión por el path real (a través de `Clone`).
+- Blindaje adicional en el frontend (defensa en profundidad): la vista de resultados coacciona a array cualquier lista del backend antes de iterar, para degradar en vez de romperse ante un shape inesperado.
+
 ## [0.4.1] — 2026-07-05
 
 Ronda dinámica de auditoría (instancia viva) sobre v0.4.0: DAST (nuclei, 0 hallazgos en 1160 templates), carga (k6, p95 37ms bajo 30 VUs, rate limiter activo), mutation testing (gremlins en `internal/searx`, 70% de eficacia) y accesibilidad (axe WCAG 2.2 AA).
