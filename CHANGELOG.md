@@ -2,6 +2,11 @@
 
 Formato basado en [Keep a Changelog](https://keepachangelog.com/es/1.1.0/); versionado [SemVer](https://semver.org/lang/es/).
 
+## [0.5.1] — 2026-07-05
+
+### Corregido
+- Federado: una navegación de página sin sesión ahora redirige en el servidor directo a `/auth/login` (302) en vez de servir la SPA y decidir en el cliente. Elimina el flash del buscador antes de la pantalla de Lockatus. Los assets y las llamadas a la API no se ven afectados; `/auth/login` no entra en loop.
+
 ## [0.5.0] — 2026-07-05
 
 ### Añadido

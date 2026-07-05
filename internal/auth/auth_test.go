@@ -164,6 +164,42 @@ func TestFederatedIgnoresLocalCreds(t *testing.T) {
 	}
 }
 
+func TestFederatedRedirectsPageToLogin(t *testing.T) {
+	// Federado sin sesión: una navegación de página (Accept text/html) va
+	// directo a /auth/login — sin flashear la SPA.
+	a := &Auth{enabled: true, federated: true, secret: []byte("k"), flows: map[string]flow{}}
+	srv := httptest.NewServer(a.Gate(okHandler()))
+	defer srv.Close()
+	client := &http.Client{CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
+
+	// La home como navegación de browser → 302 a /auth/login.
+	req, _ := http.NewRequest(http.MethodGet, srv.URL+"/", nil)
+	req.Header.Set("Accept", "text/html,application/xhtml+xml")
+	resp, _ := client.Do(req)
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusFound || resp.Header.Get("Location") != "/auth/login" {
+		t.Fatalf("navegación sin sesión: %d → %q, want 302 /auth/login", resp.StatusCode, resp.Header.Get("Location"))
+	}
+
+	// Un asset (Accept no-html) NO redirige: se sirve normal.
+	req2, _ := http.NewRequest(http.MethodGet, srv.URL+"/app.js", nil)
+	req2.Header.Set("Accept", "*/*")
+	resp2, _ := client.Do(req2)
+	resp2.Body.Close()
+	if resp2.StatusCode != http.StatusOK {
+		t.Errorf("asset = %d, want 200 (no redirige)", resp2.StatusCode)
+	}
+
+	// /auth/login mismo no debe entrar en loop.
+	req3, _ := http.NewRequest(http.MethodGet, srv.URL+"/auth/login", nil)
+	req3.Header.Set("Accept", "text/html")
+	resp3, _ := client.Do(req3)
+	resp3.Body.Close()
+	if resp3.StatusCode == http.StatusFound && resp3.Header.Get("Location") == "/auth/login" {
+		t.Error("/auth/login no debe redirigir a sí mismo (loop)")
+	}
+}
+
 func TestIsAdmin(t *testing.T) {
 	// Standalone abierto (sin auth): tu instancia → admin.
 	if !Disabled().IsAdmin(httptest.NewRequest(http.MethodGet, "/", nil)) {

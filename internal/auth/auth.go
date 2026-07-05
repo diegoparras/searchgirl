@@ -229,14 +229,38 @@ func (a *Auth) handleLocalLogin(w http.ResponseWriter, r *http.Request) {
 // Gate blocks the protected paths when auth is on and the request is
 // unauthenticated. Static assets, /auth/* and /healthz stay open so the login
 // screen can render.
+//
+// In federated mode it also redirects a browser *page* navigation (Accept:
+// text/html) straight to /auth/login when there is no session — so the SPA
+// never renders for a split second before the login kicks in (no flash of the
+// search box before Lockatus).
 func (a *Auth) Gate(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if a.enabled && protected(r.URL.Path) && !a.authorized(r) {
 			http.Error(w, "unauthorized", http.StatusUnauthorized)
 			return
 		}
+		if a.federated && a.wantsLoginRedirect(r) {
+			http.Redirect(w, r, "/auth/login", http.StatusFound)
+			return
+		}
 		next.ServeHTTP(w, r)
 	})
+}
+
+// wantsLoginRedirect is true for an unauthenticated top-level page load in
+// federated mode: a GET that the browser renders as a page (Accept text/html),
+// not an asset, an API/MCP call, /auth/* or /healthz.
+func (a *Auth) wantsLoginRedirect(r *http.Request) bool {
+	if r.Method != http.MethodGet || a.session(r) != nil {
+		return false
+	}
+	p := r.URL.Path
+	if strings.HasPrefix(p, "/auth/") || strings.HasPrefix(p, "/api/") ||
+		p == "/mcp" || p == "/thumb" || p == "/healthz" {
+		return false
+	}
+	return strings.Contains(r.Header.Get("Accept"), "text/html")
 }
 
 // authorized accepts a valid session cookie (browser: OIDC or local login)
