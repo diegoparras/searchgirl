@@ -9,7 +9,7 @@ Endurecimiento tras auditoría de seguridad multidimensional (0 hallazgos críti
 ### Añadido
 - Tests del flujo OIDC completo (`handleCallback`): state desconocido/expirado, nonce mismatch, audiencia incorrecta, happy path y anti-replay del state.
 - Tests de `ServeThumb` (guard SSRF del proxy de miniaturas): rechaza direcciones privadas, valida el esquema y sirve solo imágenes.
-- `govulncheck` en el pipeline de CI.
+- `govulncheck` en el pipeline de CI (con toolchain `stable` para escanear contra la stdlib parcheada).
 - Rangos reservados extra en el guard SSRF: Carrier-Grade NAT (`100.64.0.0/10`) y `240.0.0.0/4`.
 - `SECURITY.md`, `CONTRIBUTING.md`, `CHANGELOG.md` y `.github/dependabot.yml`.
 
