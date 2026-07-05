@@ -230,28 +230,29 @@ func (a *Auth) handleLocalLogin(w http.ResponseWriter, r *http.Request) {
 // unauthenticated. Static assets, /auth/* and /healthz stay open so the login
 // screen can render.
 //
-// In federated mode it also redirects a browser *page* navigation (Accept:
-// text/html) straight to /auth/login when there is no session — so the SPA
-// never renders for a split second before the login kicks in (no flash of the
-// search box before Lockatus).
+// In federated mode it also serves the branded login card directly for a
+// browser *page* navigation (Accept: text/html) when there is no session — so
+// the user sees "Entrar con Lockatus" immediately, without the SPA rendering
+// the search box for a split second first (no flash before login).
 func (a *Auth) Gate(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if a.enabled && protected(r.URL.Path) && !a.authorized(r) {
 			http.Error(w, "unauthorized", http.StatusUnauthorized)
 			return
 		}
-		if a.federated && a.wantsLoginRedirect(r) {
-			http.Redirect(w, r, "/auth/login", http.StatusFound)
+		if a.federated && a.wantsLoginPage(r) {
+			w.Header().Set("Content-Type", "text/html; charset=utf-8")
+			_, _ = w.Write([]byte(loginHTML))
 			return
 		}
 		next.ServeHTTP(w, r)
 	})
 }
 
-// wantsLoginRedirect is true for an unauthenticated top-level page load in
+// wantsLoginPage is true for an unauthenticated top-level page load in
 // federated mode: a GET that the browser renders as a page (Accept text/html),
 // not an asset, an API/MCP call, /auth/* or /healthz.
-func (a *Auth) wantsLoginRedirect(r *http.Request) bool {
+func (a *Auth) wantsLoginPage(r *http.Request) bool {
 	if r.Method != http.MethodGet || a.session(r) != nil {
 		return false
 	}
@@ -474,4 +475,24 @@ const sessionClosedHTML = `<!doctype html>
 <h2>Sesión cerrada</h2>
 <p class="login-sub">Cerraste sesión en Searchgirl.</p>
 <a class="login-sso" href="{{BACK}}">Volver a entrar</a>
+</div></div></body></html>`
+
+// loginHTML is the branded login card served server-side in federated mode
+// when there is no session — the fuchsia "Entrar con Lockatus" screen, shown
+// immediately (no flash of the SPA search box). The button starts the OIDC
+// flow via /auth/login.
+const loginHTML = `<!doctype html>
+<html lang="es"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Searchgirl</title>
+<script>if(localStorage.getItem("searchgirl.theme")==="dark")document.documentElement.dataset.theme="dark"</script>
+<link rel="icon" type="image/svg+xml" href="/searchgirl.svg">
+<link rel="stylesheet" href="/fonts.css">
+<link rel="stylesheet" href="/escriba-ui.css">
+<link rel="stylesheet" href="/app.css"></head>
+<body><div class="login-overlay"><div class="login-card">
+<img class="logo" src="/searchgirl.svg" alt="">
+<h2>Searchgirl</h2>
+<p class="login-sub">El buscador de la Suite Escriba · By SearXNG</p>
+<a class="login-sso" href="/auth/login">Entrar con Lockatus</a>
 </div></div></body></html>`

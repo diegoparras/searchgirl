@@ -1,6 +1,7 @@
 package auth
 
 import (
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -164,39 +165,49 @@ func TestFederatedIgnoresLocalCreds(t *testing.T) {
 	}
 }
 
-func TestFederatedRedirectsPageToLogin(t *testing.T) {
-	// Federado sin sesión: una navegación de página (Accept text/html) va
-	// directo a /auth/login — sin flashear la SPA.
+func TestFederatedServesLoginCard(t *testing.T) {
+	// Federado sin sesión: una navegación de página (Accept text/html) recibe
+	// la card de login con branding — sin flashear la SPA, sin ir directo al hub.
 	a := &Auth{enabled: true, federated: true, secret: []byte("k"), flows: map[string]flow{}}
 	srv := httptest.NewServer(a.Gate(okHandler()))
 	defer srv.Close()
-	client := &http.Client{CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
 
-	// La home como navegación de browser → 302 a /auth/login.
+	// La home como navegación de browser → 200 con la card "Entrar con Lockatus".
 	req, _ := http.NewRequest(http.MethodGet, srv.URL+"/", nil)
 	req.Header.Set("Accept", "text/html,application/xhtml+xml")
-	resp, _ := client.Do(req)
+	resp, _ := http.DefaultClient.Do(req)
+	body, _ := io.ReadAll(resp.Body)
 	resp.Body.Close()
-	if resp.StatusCode != http.StatusFound || resp.Header.Get("Location") != "/auth/login" {
-		t.Fatalf("navegación sin sesión: %d → %q, want 302 /auth/login", resp.StatusCode, resp.Header.Get("Location"))
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("navegación sin sesión = %d, want 200", resp.StatusCode)
+	}
+	for _, want := range []string{"Entrar con Lockatus", "login-card", `href="/auth/login"`, "Searchgirl"} {
+		if !strings.Contains(string(body), want) {
+			t.Errorf("la card de login no contiene %q", want)
+		}
+	}
+	// Sirve la card, no el next handler (la SPA que flashearía el buscador).
+	if string(body) == "ok" {
+		t.Error("no debe llegar a servir la SPA/next handler")
 	}
 
-	// Un asset (Accept no-html) NO redirige: se sirve normal.
-	req2, _ := http.NewRequest(http.MethodGet, srv.URL+"/app.js", nil)
+	// Un asset (Accept no-html) se sirve normal (para que la card se vea).
+	req2, _ := http.NewRequest(http.MethodGet, srv.URL+"/app.css", nil)
 	req2.Header.Set("Accept", "*/*")
-	resp2, _ := client.Do(req2)
+	resp2, _ := http.DefaultClient.Do(req2)
 	resp2.Body.Close()
 	if resp2.StatusCode != http.StatusOK {
-		t.Errorf("asset = %d, want 200 (no redirige)", resp2.StatusCode)
+		t.Errorf("asset = %d, want 200", resp2.StatusCode)
 	}
 
-	// /auth/login mismo no debe entrar en loop.
+	// /auth/login pasa (inicia el flujo OIDC, no recibe la card).
 	req3, _ := http.NewRequest(http.MethodGet, srv.URL+"/auth/login", nil)
 	req3.Header.Set("Accept", "text/html")
-	resp3, _ := client.Do(req3)
+	resp3, _ := http.DefaultClient.Do(req3)
+	b3, _ := io.ReadAll(resp3.Body)
 	resp3.Body.Close()
-	if resp3.StatusCode == http.StatusFound && resp3.Header.Get("Location") == "/auth/login" {
-		t.Error("/auth/login no debe redirigir a sí mismo (loop)")
+	if strings.Contains(string(b3), "Entrar con Lockatus") {
+		t.Error("/auth/login no debe recibir la card (loop)")
 	}
 }
 

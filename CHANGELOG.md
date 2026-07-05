@@ -2,6 +2,11 @@
 
 Formato basado en [Keep a Changelog](https://keepachangelog.com/es/1.1.0/); versionado [SemVer](https://semver.org/lang/es/).
 
+## [0.5.2] — 2026-07-05
+
+### Cambiado
+- Federado: la pantalla de login vuelve a ser la card con branding Searchgirl ("Entrar con Lockatus", colores fucsia), pero ahora se sirve del lado del servidor apenas se detecta que no hay sesión — así aparece de inmediato, sin el flash del buscador que había antes ni el redirect directo al hub de v0.5.1.
+
 ## [0.5.1] — 2026-07-05
 
 ### Corregido
