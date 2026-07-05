@@ -1,3 +1,10 @@
 /searchgirl
 /searchgirl.exe
 .env
+# Informes de auditoría: material interno, no se publican al repo.
+AUDIT-*.md
+# Artefactos de cobertura y scratch.
+cover.out
+cover.html
+*.tmp
+test_*.txt

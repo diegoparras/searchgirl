@@ -6,7 +6,9 @@ package api
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
+	"os"
 	"strconv"
 	"strings"
 	"time"
@@ -58,11 +60,11 @@ func (s *Server) handleAnswer(w http.ResponseWriter, r *http.Request) {
 	}
 	res, err := s.Answer.Answer(r.Context(), req)
 	if err != nil {
-		status := http.StatusBadGateway
 		if isBadRequest(err) {
-			status = http.StatusBadRequest
+			writeErr(w, http.StatusBadRequest, err.Error())
+			return
 		}
-		writeErr(w, status, err.Error())
+		upstreamErr(w, "answer", err)
 		return
 	}
 	writeJSON(w, http.StatusOK, res)
@@ -84,7 +86,10 @@ func (s *Server) handleRead(w http.ResponseWriter, r *http.Request) {
 	}
 	doc, err := s.Reader.Read(r.Context(), in.URL, in.MaxLength, in.Raw)
 	if err != nil {
-		writeErr(w, http.StatusBadGateway, err.Error())
+		// El motivo (esquema inválido, dirección no pública, host caído)
+		// se loguea; al cliente le llega genérico para no revelar la lógica
+		// SSRF ni segmentos de red interna.
+		upstreamErr(w, "read", err)
 		return
 	}
 	writeJSON(w, http.StatusOK, doc)
@@ -127,11 +132,11 @@ func (s *Server) handleSearch(w http.ResponseWriter, r *http.Request) {
 	}
 	resp, err := s.Search.Search(r.Context(), q)
 	if err != nil {
-		status := http.StatusBadGateway
 		if isBadRequest(err) {
-			status = http.StatusBadRequest
+			writeErr(w, http.StatusBadRequest, err.Error()) // culpa del input, sin internals
+			return
 		}
-		writeErr(w, status, err.Error())
+		upstreamErr(w, "search", err) // fallo de SearXNG: genérico al cliente, detalle al log
 		return
 	}
 	writeJSON(w, http.StatusOK, resp)
@@ -141,7 +146,7 @@ func (s *Server) handleSuggest(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query().Get("q")
 	suggestions, err := s.Search.Suggest(r.Context(), q)
 	if err != nil {
-		writeErr(w, http.StatusBadGateway, err.Error())
+		upstreamErr(w, "suggest", err)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"query": q, "suggestions": suggestions})
@@ -150,7 +155,7 @@ func (s *Server) handleSuggest(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleEngines(w http.ResponseWriter, r *http.Request) {
 	engines, err := s.Search.Engines(r.Context())
 	if err != nil {
-		writeErr(w, http.StatusBadGateway, err.Error())
+		upstreamErr(w, "engines", err)
 		return
 	}
 	writeJSON(w, http.StatusOK, engines)
@@ -207,4 +212,12 @@ func writeJSON(w http.ResponseWriter, status int, v any) {
 
 func writeErr(w http.ResponseWriter, status int, msg string) {
 	writeJSON(w, status, map[string]string{"error": msg})
+}
+
+// upstreamErr handles a backend/network failure: the detailed error goes to
+// the server log (for the operator running `docker logs`), the client gets a
+// generic 502 — no internal URLs, no SSRF logic, no SearXNG config hints.
+func upstreamErr(w http.ResponseWriter, op string, err error) {
+	fmt.Fprintf(os.Stderr, "searchgirl api: %s failed: %v\n", op, err)
+	writeErr(w, http.StatusBadGateway, "el servicio de búsqueda no está disponible por el momento")
 }

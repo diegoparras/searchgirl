@@ -191,8 +191,9 @@ func (l *ipLimiter) middleware(next http.Handler) http.Handler {
 		return next
 	}
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// /auth/login entra al límite para frenar fuerza bruta del login local.
-		if strings.HasPrefix(r.URL.Path, "/api/") || r.URL.Path == "/mcp" || r.URL.Path == "/auth/login" {
+		// /auth/login entra al límite para frenar fuerza bruta del login local;
+		// /thumb porque también hace fetch saliente (aunque tras el guard SSRF).
+		if strings.HasPrefix(r.URL.Path, "/api/") || r.URL.Path == "/mcp" || r.URL.Path == "/auth/login" || r.URL.Path == "/thumb" {
 			if !l.allow(l.clientIP(r), time.Now()) {
 				http.Error(w, "rate limit exceeded", http.StatusTooManyRequests)
 				return

@@ -1,0 +1,26 @@
+version: 2
+updates:
+  # Mantiene los SHAs de las GitHub Actions al día (el pin por SHA evita el
+  # ataque de tag mutable; Dependabot abre PRs cuando hay releases nuevos).
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    commit-message:
+      prefix: ci
+
+  # Dependencias Go.
+  - package-ecosystem: gomod
+    directory: /
+    schedule:
+      interval: weekly
+    commit-message:
+      prefix: deps
+
+  # Imagen base del Dockerfile (golang:1.26@sha256:...).
+  - package-ecosystem: docker
+    directory: /
+    schedule:
+      interval: weekly
+    commit-message:
+      prefix: docker

@@ -193,9 +193,31 @@ func (r *Reader) newGuardedClient() *http.Client {
 	}
 }
 
+// extraReserved cubre rangos que net.IP no clasifica como privados pero que
+// no deben alcanzarse desde un fetch público: Carrier-Grade NAT (RFC 6598) y
+// el bloque reservado 240.0.0.0/4 (RFC 5735). Endurece el guard SSRF más allá
+// de lo que trae la stdlib.
+var extraReserved = func() []*net.IPNet {
+	var nets []*net.IPNet
+	for _, cidr := range []string{"100.64.0.0/10", "240.0.0.0/4"} {
+		if _, n, err := net.ParseCIDR(cidr); err == nil {
+			nets = append(nets, n)
+		}
+	}
+	return nets
+}()
+
 func isPublicIP(ip net.IP) bool {
-	return !(ip.IsLoopback() || ip.IsPrivate() || ip.IsLinkLocalUnicast() ||
-		ip.IsLinkLocalMulticast() || ip.IsUnspecified() || ip.IsMulticast())
+	if ip.IsLoopback() || ip.IsPrivate() || ip.IsLinkLocalUnicast() ||
+		ip.IsLinkLocalMulticast() || ip.IsUnspecified() || ip.IsMulticast() {
+		return false
+	}
+	for _, n := range extraReserved {
+		if n.Contains(ip) {
+			return false
+		}
+	}
+	return true
 }
 
 // --- HTML → Markdown ---

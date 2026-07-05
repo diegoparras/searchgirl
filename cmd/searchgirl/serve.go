@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"time"
 
 	"github.com/diegoparras/searchgirl/internal/answer"
 	"github.com/diegoparras/searchgirl/internal/api"
@@ -73,6 +74,22 @@ func cmdServe(args []string) error {
 	h = newIPLimiterFromEnv().middleware(h) // rate limit por IP (config por .env)
 	h = securityHeaders(h, tls)             // headers conservadores
 
-	fmt.Fprintf(os.Stderr, "searchgirl: serving on %s [auth=%s] — API at /api, MCP at /mcp (searxng %s)\n", *httpAddr, authn.Mode(), svc.Client.BaseURL)
-	return http.ListenAndServe(*httpAddr, h)
+	// No exponemos la URL interna de SearXNG en logs (topología interna): solo
+	// si está configurada. El detalle vive en la env, no en docker logs.
+	fmt.Fprintf(os.Stderr, "searchgirl: serving on %s [auth=%s] — API at /api, MCP at /mcp (searxng backend configured)\n", *httpAddr, authn.Mode())
+
+	// Timeouts explícitos contra Slowloris y conexiones colgadas. ReadHeader
+	// corto (headers deben llegar rápido); Write generoso porque una búsqueda
+	// puede tardar mientras SearXNG consulta motores; el modo Respuesta IA usa
+	// su propio timeout de request, así que 120s de Write lo cubre.
+	server := &http.Server{
+		Addr:              *httpAddr,
+		Handler:           h,
+		ReadHeaderTimeout: 10 * time.Second,
+		ReadTimeout:       30 * time.Second,
+		WriteTimeout:      120 * time.Second,
+		IdleTimeout:       90 * time.Second,
+		MaxHeaderBytes:    1 << 20,
+	}
+	return server.ListenAndServe()
 }

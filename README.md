@@ -95,6 +95,7 @@ LLM_MODEL=qwen2.5:7b
 
 | Variable | Default | Qué controla |
 |---|---|---|
+| `SEARCHGIRL_ADDR` | `:8080` | Dirección HTTP donde escucha (equivale al flag `-http`; vacío = MCP por stdio) |
 | `SEARXNG_URL` | `http://searxng:8080` | URL del SearXNG interno |
 | `SEARXNG_TIMEOUT` | `10s` | Timeout por búsqueda |
 | `SEARXNG_SECRET` | — | `secret_key` del contenedor SearXNG |
@@ -106,6 +107,7 @@ LLM_MODEL=qwen2.5:7b
 | `SEARCHGIRL_FETCH_ALLOW_PRIVATE` | `0` | Permitir IPs privadas en `url_read` (guarda SSRF) |
 | `ANTHROPIC_API_KEY` / `ANTHROPIC_MODEL` | — | Proveedor Anthropic (prioridad si está) |
 | `LLM_BASE_URL` / `LLM_MODEL` / `LLM_API_KEY` | — | Proveedor OpenAI-compatible |
+| `LLM_REFERER` | — | `HTTP-Referer` enviado al proveedor OpenAI-compatible (atribución de app en OpenRouter) |
 | `SEARCHGIRL_USER` / `SEARCHGIRL_PASS` | — | Login local standalone: un usuario, pantalla de entrada estándar Escriba |
 | `SEARCHGIRL_MCP_TOKEN` | — | Tokens Bearer para API+MCP. Varios con nombre: `claude:abc...,n8n:def...` — revocar uno no rota los demás |
 | `SEARCHGIRL_TRUSTED_PROXIES` | — | IPs/CIDRs del reverse proxy (coma-separados). Con esto el rate limit usa la IP real del cliente vía `X-Forwarded-For` |

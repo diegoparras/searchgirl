@@ -1,7 +1,9 @@
 # syntax=docker/dockerfile:1
 
 # ---- build: a single static binary, no CGO ----
-FROM golang:1.26 AS build
+# Base pinneada por digest (build reproducible). Actualizar junto con el tag:
+#   docker manifest inspect golang:1.26 | grep digest
+FROM golang:1.26@sha256:f92b729f5f76b045df75ee1cb324ea68658bbc82feecd286c6ce08bf339fd74d AS build
 WORKDIR /src
 COPY go.mod go.sum ./
 RUN go mod download

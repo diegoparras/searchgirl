@@ -280,27 +280,37 @@ func (a *Auth) handleCallback(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "invalid or expired login state", http.StatusBadRequest)
 		return
 	}
+	// Los errores del intercambio/verificación se loguean con detalle
+	// server-side pero al cliente le llega un mensaje genérico: no filtrar
+	// URLs del issuer, client-id ni el motivo exacto del rechazo (recon).
 	tok, err := a.oauth2.Exchange(r.Context(), r.URL.Query().Get("code"), oauth2.VerifierOption(fl.verifier))
 	if err != nil {
-		http.Error(w, "token exchange failed: "+err.Error(), http.StatusBadGateway)
+		fmt.Fprintf(os.Stderr, "searchgirl auth: token exchange failed: %v\n", err)
+		http.Error(w, "authentication failed", http.StatusBadGateway)
 		return
 	}
 	rawID, _ := tok.Extra("id_token").(string)
 	if rawID == "" {
-		http.Error(w, "no id_token in token response", http.StatusBadGateway)
+		fmt.Fprintln(os.Stderr, "searchgirl auth: no id_token in token response")
+		http.Error(w, "authentication failed", http.StatusBadGateway)
 		return
 	}
 	idToken, err := a.verifier.Verify(r.Context(), rawID)
 	if err != nil {
-		http.Error(w, "id_token verification failed: "+err.Error(), http.StatusUnauthorized)
+		fmt.Fprintf(os.Stderr, "searchgirl auth: id_token verification failed: %v\n", err)
+		http.Error(w, "authentication failed", http.StatusUnauthorized)
 		return
 	}
 	if idToken.Nonce != fl.nonce {
-		http.Error(w, "nonce mismatch", http.StatusUnauthorized)
+		http.Error(w, "authentication failed", http.StatusUnauthorized)
 		return
 	}
 	var c claims
-	_ = idToken.Claims(&c)
+	if err := idToken.Claims(&c); err != nil {
+		fmt.Fprintf(os.Stderr, "searchgirl auth: id_token claims decode failed: %v\n", err)
+		http.Error(w, "authentication failed", http.StatusBadGateway)
+		return
+	}
 	a.setSession(w, session{Email: c.Email, Name: c.Name, Role: c.Role, Exp: time.Now().Add(sessionTTL).UnixMilli()})
 	http.Redirect(w, r, "/", http.StatusFound)
 }

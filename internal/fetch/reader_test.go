@@ -4,6 +4,7 @@ import (
 	"context"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"strings"
 	"testing"
 )
@@ -88,6 +89,71 @@ func TestReadTruncatesByLength(t *testing.T) {
 	}
 	if n := len([]rune(doc.Markdown)); n > 130 {
 		t.Errorf("markdown length = %d runes", n)
+	}
+}
+
+func TestServeThumbRefusesPrivate(t *testing.T) {
+	// El backend es loopback: el guard debe rechazarlo con AllowPrivate off.
+	backend := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		t.Error("la request nunca debe llegar al backend privado")
+	}))
+	defer backend.Close()
+
+	r := &Reader{MaxBytes: 1 << 20, AllowPrivate: false}
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/thumb?u="+url.QueryEscape(backend.URL+"/x.jpg"), nil)
+	r.ServeThumb(rec, req)
+	if rec.Code == http.StatusOK {
+		t.Fatalf("thumb de dirección privada debe fallar, dio %d", rec.Code)
+	}
+}
+
+func TestServeThumbValidatesScheme(t *testing.T) {
+	r := &Reader{AllowPrivate: true}
+	for _, bad := range []string{"", "ftp://x/y.jpg", "file:///etc/passwd", "javascript:alert(1)"} {
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodGet, "/thumb?u="+url.QueryEscape(bad), nil)
+		r.ServeThumb(rec, req)
+		if rec.Code != http.StatusBadRequest {
+			t.Errorf("esquema %q debe dar 400, dio %d", bad, rec.Code)
+		}
+	}
+}
+
+func TestServeThumbOnlyServesImages(t *testing.T) {
+	// Content-Type no-imagen: se rechaza aunque el fetch sea exitoso (evita
+	// usar /thumb como proxy genérico de contenido).
+	backend := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/html")
+		_, _ = w.Write([]byte("<html>no soy una imagen</html>"))
+	}))
+	defer backend.Close()
+
+	r := &Reader{MaxBytes: 1 << 20, AllowPrivate: true}
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/thumb?u="+url.QueryEscape(backend.URL+"/page"), nil)
+	r.ServeThumb(rec, req)
+	if rec.Code != http.StatusNotFound {
+		t.Fatalf("contenido no-imagen debe dar 404, dio %d", rec.Code)
+	}
+}
+
+func TestServeThumbServesImage(t *testing.T) {
+	backend := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "image/jpeg")
+		_, _ = w.Write([]byte{0xFF, 0xD8, 0xFF, 0xE0}) // cabecera JPEG mínima
+	}))
+	defer backend.Close()
+
+	r := &Reader{MaxBytes: 1 << 20, AllowPrivate: true}
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/thumb?u="+url.QueryEscape(backend.URL+"/pic.jpg"), nil)
+	r.ServeThumb(rec, req)
+	if rec.Code != http.StatusOK || rec.Header().Get("Content-Type") != "image/jpeg" {
+		t.Fatalf("imagen válida: code=%d ct=%q", rec.Code, rec.Header().Get("Content-Type"))
+	}
+	if rec.Header().Get("X-Content-Type-Options") != "nosniff" {
+		t.Error("falta X-Content-Type-Options nosniff en el thumb")
 	}
 }
 

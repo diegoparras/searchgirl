@@ -178,12 +178,12 @@ func normalize(raw *rawResponse, p Params) *Response {
 		}
 		for _, u := range ib.URLs {
 			if u.URL != "" {
-				box.Links = append(box.Links, InfoboxLink{Title: u.Title, URL: u.URL})
+				box.Links = append(box.Links, InfoboxLink(u))
 			}
 		}
 		for _, a := range ib.Attributes {
 			if a.Label != "" && a.Value != "" {
-				box.Attributes = append(box.Attributes, InfoboxAttr{Label: a.Label, Value: a.Value})
+				box.Attributes = append(box.Attributes, InfoboxAttr(a))
 			}
 		}
 		if box.Title != "" || box.Content != "" {
