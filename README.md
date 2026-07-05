@@ -106,7 +106,8 @@ LLM_MODEL=qwen2.5:7b
 | `SEARCHGIRL_FETCH_MAX_BYTES` | `2097152` | Tope de descarga en `url_read` |
 | `SEARCHGIRL_FETCH_ALLOW_PRIVATE` | `0` | Permitir IPs privadas en `url_read` (guarda SSRF) |
 | `ANTHROPIC_API_KEY` / `ANTHROPIC_MODEL` | — | Proveedor Anthropic (prioridad si está) |
-| `LLM_BASE_URL` / `LLM_MODEL` / `LLM_API_KEY` | — | Proveedor OpenAI-compatible |
+| `LLM_BASE_URL` / `LLM_MODEL` / `LLM_API_KEY` | — | Proveedor OpenAI-compatible (default; lo elegido desde la UI tiene prioridad) |
+| `SEARCHGIRL_CONFIG_DIR` | — | Directorio (volumen) donde persiste el modelo elegido desde la UI (`llm.json`). Sin esto, la elección no sobrevive reinicios |
 | `LLM_REFERER` | — | `HTTP-Referer` enviado al proveedor OpenAI-compatible (atribución de app en OpenRouter) |
 | `SEARCHGIRL_USER` / `SEARCHGIRL_PASS` | — | Login local standalone: un usuario, pantalla de entrada estándar Escriba |
 | `SEARCHGIRL_MCP_TOKEN` | — | Tokens Bearer para API+MCP. Varios con nombre: `claude:abc...,n8n:def...` — revocar uno no rota los demás |

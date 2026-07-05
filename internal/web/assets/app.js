@@ -50,6 +50,11 @@ async function init() {
     $("#aiBtn").classList.remove("hidden");
     $("#aiBtn").addEventListener("click", runAnswer);
   }
+  // El panel "Modelo IA" solo lo ve un admin (o standalone en loopback).
+  if (config.llm && config.llm.can_configure) {
+    $("#settingsBtn").classList.remove("hidden");
+    wireSettings();
+  }
 
   // Estado desde la URL (compartible / botón atrás).
   readURL();
@@ -104,7 +109,7 @@ function wireChrome() {
   kebab.addEventListener("click", (e) => { e.stopPropagation(); menu.classList.toggle("hidden"); });
   document.addEventListener("click", (e) => { if (!menu.contains(e.target)) menu.classList.add("hidden"); });
   document.addEventListener("keydown", (e) => {
-    if (e.key === "Escape") { menu.classList.add("hidden"); $("#aboutModal").classList.add("hidden"); }
+    if (e.key === "Escape") { menu.classList.add("hidden"); $("#aboutModal").classList.add("hidden"); $("#settingsModal").classList.add("hidden"); }
   });
 
   const toggle = $("#themeToggle");
@@ -486,6 +491,109 @@ function showHome() {
 function showResults() {
   $("#home").classList.add("hidden");
   $("#results").classList.remove("hidden");
+}
+
+/* ---------- panel Modelo IA (solo admin) ---------- */
+
+const LLM_PRESETS = {
+  ollama: "http://ollama:11434/v1",
+  openrouter: "https://openrouter.ai/api/v1",
+  custom: "",
+};
+
+function wireSettings() {
+  const m = $("#settingsModal");
+  $("#settingsBtn").addEventListener("click", openSettings);
+  $("#settingsClose").addEventListener("click", () => m.classList.add("hidden"));
+  m.addEventListener("click", (e) => { if (e.target === m) m.classList.add("hidden"); });
+
+  const key = $("#setKey");
+  $("#setKeyToggle").addEventListener("click", () => { key.type = key.type === "password" ? "text" : "password"; });
+
+  $("#setProvider").addEventListener("change", (e) => {
+    const p = e.target.value;
+    if (p && p in LLM_PRESETS) {
+      $("#setBase").value = LLM_PRESETS[p];
+      if (p === "ollama") key.value = ""; // Ollama no usa key
+    }
+  });
+
+  $("#setLoadModels").addEventListener("click", loadModels);
+  $("#setModelSelect").addEventListener("change", (e) => { if (e.target.value) $("#setModel").value = e.target.value; });
+
+  $("#setTest").addEventListener("click", async () => {
+    await saveSettings();
+    const st = $("#setStatus");
+    st.textContent = "probando…"; st.className = "set-status";
+    try {
+      const r = await (await fetch("/api/settings/test", { method: "POST" })).json();
+      st.textContent = r.ok ? ("conecta" + (r.name ? " — " + r.name : "")) : ("no conecta: " + r.error);
+      st.className = "set-status " + (r.ok ? "ok" : "bad");
+    } catch (e) { st.textContent = "error: " + e.message; st.className = "set-status bad"; }
+  });
+
+  $("#setSave").addEventListener("click", async () => {
+    await saveSettings();
+    m.classList.add("hidden");
+    // Refrescar el estado del LLM en la UI (botón Respuesta IA).
+    try {
+      config = await (await fetch("/api/config")).json();
+      $("#aiBtn").classList.toggle("hidden", !(config.llm && config.llm.available));
+    } catch { /* noop */ }
+  });
+}
+
+async function openSettings() {
+  $("#menu").classList.add("hidden");
+  let s = {};
+  try { s = await (await fetch("/api/settings")).json(); } catch { /* noop */ }
+  $("#setBase").value = s.base_url || "";
+  $("#setModel").value = s.model || "";
+  $("#setKey").value = "";
+  $("#setKey").placeholder = s.has_key ? "•••• guardada — vacío = no cambiar" : "tu API key";
+  $("#setProvider").value = "";
+  $("#setModelSelect").classList.add("hidden");
+  $("#setModelHint").textContent = "";
+  const st = $("#setStatus");
+  st.textContent = s.configured ? ("activo: " + s.name) : "apagado";
+  st.className = "set-status " + (s.configured ? "ok" : "");
+  if (!s.persisted) {
+    $("#setModelHint").textContent = "Sin volumen /config: la elección no persiste tras reiniciar.";
+    $("#setModelHint").className = "model-hint";
+  }
+  $("#settingsModal").classList.remove("hidden");
+}
+
+async function saveSettings() {
+  const body = JSON.stringify({ base_url: $("#setBase").value.trim(), model: $("#setModel").value.trim(), api_key: $("#setKey").value });
+  return (await fetch("/api/settings", { method: "POST", headers: { "Content-Type": "application/json" }, body })).json();
+}
+
+async function loadModels() {
+  const hint = $("#setModelHint"), sel = $("#setModelSelect"), btn = $("#setLoadModels");
+  const base = $("#setBase").value.trim(), key = $("#setKey").value;
+  if (!base) { hint.textContent = "Primero poné el servidor (base URL)."; hint.className = "model-hint bad"; return; }
+  btn.disabled = true; hint.textContent = "buscando modelos…"; hint.className = "model-hint";
+  let r;
+  try {
+    r = await (await fetch("/api/settings/models", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ base_url: base, api_key: key }) })).json();
+  } catch (e) { btn.disabled = false; hint.textContent = "error de red: " + e.message; hint.className = "model-hint bad"; return; }
+  btn.disabled = false;
+  if (!r.ok) { hint.textContent = "No pude listar modelos (" + (r.error || "?") + "). Escribí el nombre a mano."; hint.className = "model-hint bad"; sel.classList.add("hidden"); return; }
+  sel.replaceChildren();
+  const ph = el("option", null, "— elegí un modelo —"); ph.value = ""; sel.appendChild(ph);
+  const group = (label, arr) => {
+    if (!arr.length) return;
+    const g = document.createElement("optgroup"); g.label = label;
+    arr.forEach((mo) => { const o = el("option", null, mo.id); o.value = mo.id; g.appendChild(o); });
+    sel.appendChild(g);
+  };
+  const rec = r.models.filter((mo) => mo.recommended), rest = r.models.filter((mo) => !mo.recommended);
+  group("★ Recomendados", rec);
+  group("Todos los modelos", rest);
+  sel.classList.remove("hidden");
+  hint.className = "model-hint ok";
+  hint.textContent = r.count + " modelos" + (rec.length ? " · recomendados: " + rec.slice(0, 3).map((mo) => mo.id).join(", ") : "");
 }
 
 /* ---------- util ---------- */

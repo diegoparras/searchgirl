@@ -164,6 +164,23 @@ main { max-width: 1120px; margin: 0 auto; padding: 0 24px 72px; }
 .pass-toggle:hover { color: var(--text); background: var(--card); }
 .pass-toggle svg { width: 18px; height: 18px; }
 
+/* ---- modal Modelo IA ---- */
+.field { margin-top: 12px; }
+.field-lbl { display: block; font-size: 12px; color: var(--muted); margin-bottom: 5px; font-weight: 600; }
+.field-opt { font-weight: 400; text-transform: none; letter-spacing: 0; }
+.field input, .field select { width: 100%; }
+.model-row { display: flex; gap: 8px; }
+.model-row input { flex: 1; min-width: 0; }
+.model-row .mini { flex: 0 0 auto; white-space: nowrap; }
+.mini { padding: 4px 10px; font-size: 12px; border-radius: 8px; }
+#setModelSelect { width: 100%; margin-top: 8px; }
+.model-hint { font-size: 12px; color: var(--muted); margin-top: 6px; min-height: 15px; }
+.model-hint.ok { color: var(--ok); }
+.model-hint.bad { color: var(--err); }
+.set-status { font-size: 12.5px; color: var(--muted); margin-top: 12px; min-height: 16px; }
+.set-status.ok { color: var(--ok); }
+.set-status.bad { color: var(--err); }
+
 /* ---- responsive ---- */
 @media (max-width: 900px) {
   .rgrid { grid-template-columns: 1fr; }

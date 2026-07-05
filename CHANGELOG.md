@@ -2,6 +2,13 @@
 
 Formato basado en [Keep a Changelog](https://keepachangelog.com/es/1.1.0/); versionado [SemVer](https://semver.org/lang/es/).
 
+## [0.5.0] — 2026-07-05
+
+### Añadido
+- **Panel "Modelo IA" en la UI** (solo admin): elegí proveedor y modelo del modo Respuesta IA en runtime, sin redeploy. Dropdown de presets (Ollama / OpenRouter / Personalizado) que autocompleta la base URL, botón "cargar modelos" que lista los del servicio agrupados en recomendados/todos, campo API key con ojito, botones Probar y Guardar. El proveedor pasa a ser runtime-switchable (`llm.Store` envuelve al activo y cae a las env vars cuando no hay nada guardado).
+- Persistencia de la elección en un volumen `/config` (`SEARCHGIRL_CONFIG_DIR`, `llm.json`); sin volumen, la elección vive en memoria hasta el reinicio (la UI lo avisa).
+- Gate por rol: el panel y sus endpoints (`/api/settings`, `/api/settings/test`, `/api/settings/models`) solo los ve/usa un admin (federado `role==admin`; login local; standalone en loopback). `auth.IsAdmin`, `api` expone `llm.can_configure`.
+
 ## [0.4.2] — 2026-07-05
 
 ### Corregido

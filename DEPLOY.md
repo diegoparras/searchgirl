@@ -209,28 +209,33 @@ volvés autenticado. `/auth/me` pasa a `authenticated:true` con tu email y rol.
 
 ---
 
-## Respuesta IA: OpenRouter u Ollama
+## Respuesta IA: elegí el modelo desde la UI
 
-El modo "Respuesta IA" (síntesis con citas) es opcional. Con lo que tenés:
+El modo "Respuesta IA" (síntesis con citas) es opcional. La forma cómoda de configurarlo es
+**desde la propia UI**: entrás como admin, menú ⋮ → **Modelo IA**, elegís un preset (Ollama /
+OpenRouter), "cargar modelos", elegís uno y guardás. La elección persiste si el servicio tiene
+un **volumen `/config`** (ya viene en el compose; en Easypanel: servicio `app` → **Mounts →
+Volume**, mount path `/config`). Sin ese volumen, la elección se pierde al reiniciar.
 
-- **OpenRouter (recomendado en Easypanel)** — es una API remota, funciona directo desde el
-  contenedor sin exponer nada. En el servicio `app`:
-  ```
-  LLM_BASE_URL=https://openrouter.ai/api/v1
-  LLM_MODEL=deepseek/deepseek-chat        # o el modelo que prefieras
-  LLM_API_KEY=sk-or-...
-  LLM_REFERER=https://buscar.tu-dominio.com   # atribución de app (opcional)
-  ```
-- **Ollama** — solo si corre accesible desde el contenedor. Si Ollama está en el **mismo VPS**
-  (fuera de Docker), agregá en el servicio `app` el host del gateway y apuntá ahí:
-  ```
-  LLM_BASE_URL=http://172.17.0.1:11434/v1     # gateway Docker → host; o la IP del VPS
-  LLM_MODEL=qwen2.5:7b
-  ```
-  Asegurate de que Ollama escuche en `0.0.0.0` (`OLLAMA_HOST=0.0.0.0`) y que el firewall
-  permita el puerto 11434 desde la red Docker. En la nube, OpenRouter suele ser menos frágil.
+Presets y a qué apuntan:
+- **Ollama** → `http://ollama:11434/v1` (si Ollama corre como servicio en el **mismo proyecto**
+  de Easypanel; ajustá el hostname al de tu servicio Ollama). Sin API key.
+- **OpenRouter** → `https://openrouter.ai/api/v1` + tu API key. Los modelos se listan solos.
 
-Sin ninguno de los dos, Searchgirl anda igual — solo no aparece el botón Respuesta IA.
+También podés fijarlo por env vars (útil para arrancar ya configurado, sin tocar la UI); lo que
+guardes desde la UI tiene prioridad sobre las env:
+```
+# OpenRouter:
+LLM_BASE_URL=https://openrouter.ai/api/v1
+LLM_MODEL=deepseek/deepseek-chat
+LLM_API_KEY=sk-or-...
+# ...o Ollama (servicio en el mismo proyecto):
+LLM_BASE_URL=http://ollama:11434/v1
+LLM_MODEL=qwen2.5:7b
+```
+
+Sin ningún modelo (ni UI ni env), Searchgirl anda igual — solo no aparece el botón Respuesta IA.
+El panel "Modelo IA" solo lo ve un admin; el resto de los usuarios solo busca.
 
 ---
 

@@ -164,6 +164,30 @@ func TestFederatedIgnoresLocalCreds(t *testing.T) {
 	}
 }
 
+func TestIsAdmin(t *testing.T) {
+	// Standalone abierto (sin auth): tu instancia → admin.
+	if !Disabled().IsAdmin(httptest.NewRequest(http.MethodGet, "/", nil)) {
+		t.Error("standalone abierto debe ser admin")
+	}
+
+	// Con auth y sesión role=admin → admin; role=usuario → no.
+	a := &Auth{enabled: true, federated: true, secret: []byte("k"), flows: map[string]flow{}}
+	for role, want := range map[string]bool{"admin": true, "usuario": false, "": false} {
+		rec := httptest.NewRecorder()
+		a.setSession(rec, session{Email: "x@x", Role: role, Exp: time.Now().Add(time.Hour).UnixMilli()})
+		r := httptest.NewRequest(http.MethodGet, "/", nil)
+		r.AddCookie(rec.Result().Cookies()[0])
+		if got := a.IsAdmin(r); got != want {
+			t.Errorf("role %q: IsAdmin=%v, want %v", role, got, want)
+		}
+	}
+
+	// Con auth pero sin sesión (p.ej. token-only o anónimo) → no admin.
+	if a.IsAdmin(httptest.NewRequest(http.MethodGet, "/", nil)) {
+		t.Error("sin sesión no debe ser admin")
+	}
+}
+
 func TestMeReportsMode(t *testing.T) {
 	a := &Auth{enabled: true, tokens: parseTokens("t")}
 	rec := httptest.NewRecorder()

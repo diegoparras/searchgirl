@@ -15,6 +15,7 @@ import (
 
 	"github.com/diegoparras/searchgirl/internal/answer"
 	"github.com/diegoparras/searchgirl/internal/fetch"
+	"github.com/diegoparras/searchgirl/internal/llm"
 	"github.com/diegoparras/searchgirl/internal/search"
 )
 
@@ -22,13 +23,20 @@ type Server struct {
 	Search  *search.Service
 	Reader  *fetch.Reader
 	Answer  *answer.Engine
+	Store   *llm.Store // runtime-switchable LLM config (settings panel)
 	Version string
 
-	// AuthMode and LLM info are injected by cmd/serve so this package stays
-	// decoupled from auth and llm. Nil-safe defaults apply.
+	// AuthMode, LLM info and IsAdmin are injected by cmd/serve so this package
+	// stays decoupled from auth and llm. Nil-safe defaults apply.
 	AuthMode     func() string
 	LLMAvailable func() bool
 	LLMModel     func() string
+	IsAdmin      func(*http.Request) bool // who may change the model from the UI
+}
+
+// isAdmin is the nil-safe gate: with no injected checker (e.g. tests), allow.
+func (s *Server) isAdmin(r *http.Request) bool {
+	return s.IsAdmin == nil || s.IsAdmin(r)
 }
 
 func New(svc *search.Service, version string) *Server {
@@ -45,6 +53,12 @@ func (s *Server) Mount(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/answer", s.handleAnswer)
 	if s.Reader != nil {
 		mux.HandleFunc("GET /thumb", s.Reader.ServeThumb)
+	}
+	if s.Store != nil {
+		mux.HandleFunc("GET /api/settings", s.handleSettings)
+		mux.HandleFunc("POST /api/settings", s.handleSettings)
+		mux.HandleFunc("POST /api/settings/test", s.handleTestLLM)
+		mux.HandleFunc("POST /api/settings/models", s.handleModels)
 	}
 }
 
@@ -186,8 +200,12 @@ func (s *Server) handleConfig(w http.ResponseWriter, r *http.Request) {
 		"role":             "Buscador de la suite",
 		"auth_mode":        authMode,
 		"default_language": s.Search.DefaultLanguage,
-		"llm":              map[string]any{"available": llmAvailable, "model": llmModel},
-		"searxng_ok":       s.Search.Healthy(ctx),
+		"llm": map[string]any{
+			"available":     llmAvailable,
+			"model":         llmModel,
+			"can_configure": s.Store != nil && s.isAdmin(r), // muestra el botón Ajustes solo a admin
+		},
+		"searxng_ok": s.Search.Healthy(ctx),
 	})
 }
 

@@ -167,6 +167,21 @@ func FromEnv(ctx context.Context) (*Auth, error) {
 
 func (a *Auth) Enabled() bool { return a.enabled }
 
+// IsAdmin reports whether the request may change privileged settings (the LLM
+// model panel). Standalone-open (no auth, loopback) is your own instance → yes.
+// With auth, only a session whose role is "admin" (local login is always admin;
+// federated takes the role from Lockatus). A Bearer-token-only client (an
+// agent) is not an admin — model config is a UI action, not an MCP one.
+func (a *Auth) IsAdmin(r *http.Request) bool {
+	if !a.enabled {
+		return true
+	}
+	if s := a.session(r); s != nil {
+		return s.Role == "admin"
+	}
+	return false
+}
+
 // RegisterRoutes adds the auth endpoints. /auth/me is always present (the SPA
 // uses it to decide whether to show the login screen); the flow routes only
 // exist when federated.

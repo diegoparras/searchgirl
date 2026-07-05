@@ -52,6 +52,11 @@ services:
       LLM_BASE_URL: ${LLM_BASE_URL:-}
       LLM_MODEL: ${LLM_MODEL:-}
       LLM_API_KEY: ${LLM_API_KEY:-}
+      # Persiste el modelo elegido desde la UI (panel "Modelo IA"). Sin el
+      # volumen de abajo la elección se pierde al reiniciar (cae a las env).
+      SEARCHGIRL_CONFIG_DIR: /config
+    volumes:
+      - searchgirl-config:/config
     depends_on:
       searxng:
         condition: service_healthy
@@ -74,3 +79,6 @@ services:
       timeout: 3s
       retries: 12
     restart: unless-stopped
+
+volumes:
+  searchgirl-config:

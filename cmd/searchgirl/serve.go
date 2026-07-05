@@ -29,8 +29,10 @@ func cmdServe(args []string) error {
 
 	svc := search.FromEnv()
 	reader := fetch.FromEnv()
-	provider := llm.FromEnv()
-	ans := &answer.Engine{Search: svc, Reader: reader, Provider: provider}
+	// El proveedor LLM es runtime-switchable: el Store envuelve al provider
+	// activo (elegido desde la UI) y cae al de env cuando no hay nada guardado.
+	store := llm.NewStore(os.Getenv("SEARCHGIRL_CONFIG_DIR"), llm.FromEnv())
+	ans := &answer.Engine{Search: svc, Reader: reader, Provider: store}
 	srv := mcpsrv.New(svc, mcpsrv.Options{Version: version, Reader: reader, Answer: ans})
 
 	if *httpAddr == "" {
@@ -53,8 +55,10 @@ func cmdServe(args []string) error {
 	apiSrv := api.New(svc, version)
 	apiSrv.Reader = reader
 	apiSrv.Answer = ans
-	apiSrv.LLMAvailable = provider.Available
-	apiSrv.LLMModel = provider.Name
+	apiSrv.Store = store
+	apiSrv.IsAdmin = authn.IsAdmin
+	apiSrv.LLMAvailable = store.Available
+	apiSrv.LLMModel = store.Name
 	apiSrv.AuthMode = func() string {
 		switch authn.Mode() {
 		case "federated":
