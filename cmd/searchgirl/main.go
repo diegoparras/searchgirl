@@ -6,9 +6,14 @@ package main
 import (
 	"fmt"
 	"os"
+
+	"github.com/diegoparras/searchgirl"
 )
 
-const version = "0.6.0"
+// version es la unica fuente de verdad del numero: la usan el cartel de
+// arranque, /api/config, el MCP y el CI (searchgirl notas -version). Cada
+// version tiene su seccion en CHANGELOG.md (lo exige un test).
+const version = "0.6.1"
 
 func main() {
 	// No arguments = serve. "Fácil de usar" starts here.
@@ -26,6 +31,8 @@ func main() {
 		err = cmdServe(args)
 	case "version", "-v", "--version":
 		fmt.Println("searchgirl " + version)
+	case "notas":
+		os.Exit(runNotas(searchgirl.Changelog, version, args, os.Stdout, os.Stderr))
 	case "-h", "--help", "help":
 		usage()
 	default:
@@ -49,6 +56,8 @@ commands:
     -http :8080     serve UI + API + MCP over HTTP on this address;
                     empty = MCP over stdio (for local LLM clients)
   version           print the version
+  notas             print this version's release notes (from CHANGELOG.md)
+    -version        print only the version number
 
 environment:
   SEARXNG_URL                  SearXNG base URL (default http://searxng:8080)

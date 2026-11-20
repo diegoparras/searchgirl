@@ -2,6 +2,27 @@
 
 Formato basado en [Keep a Changelog](https://keepachangelog.com/es/1.1.0/); versionado [SemVer](https://semver.org/lang/es/).
 
+## [0.6.1] — 2026-11-20
+
+### Añadido
+- **Cada deploy dice su versión y qué cambia.** Lo primero que escribe el contenedor al levantar
+  (EasyPanel > servicio > Registros) es un cartel con la versión, la fecha y las novedades de esa
+  versión, sacadas de este CHANGELOG, que ahora va embebido en el binario.
+- **Aviso de Novedades en la interfaz**: al entrar después de una actualización aparece una sola
+  vez (por navegador) lo que cambió desde la última versión que viste. El historial queda en el
+  menú, **Novedades**, y en **Acerca de** con el enlace "Qué cambió". Lo sirve
+  `GET /api/novedades`, detrás del mismo acceso que el resto de la API.
+- **Cada versión publicada queda en GitHub**: la imagen se etiqueta también `:X.Y.Z` (con el
+  label OCI de versión), se crea el Release `vX.Y.Z` con estas notas y el resumen de la corrida
+  de Actions las muestra. Sin la sección de la versión en el CHANGELOG, la imagen no se publica.
+
+### Cambiado
+- Las acciones del CI pasan a sus versiones que corren sobre Node 24.
+
+### Seguridad
+- `golang.org/x/net` a v0.62.0: corrige las vulnerabilidades que govulncheck marcaba en v0.56.0
+  (entre ellas GO-2026-6860, en el parser HTML que usa la lectura de URLs).
+
 ## [0.6.0] — 2026-07-05
 
 ### Añadido

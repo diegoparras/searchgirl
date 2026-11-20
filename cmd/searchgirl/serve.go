@@ -8,12 +8,14 @@ import (
 	"os"
 	"time"
 
+	"github.com/diegoparras/searchgirl"
 	"github.com/diegoparras/searchgirl/internal/answer"
 	"github.com/diegoparras/searchgirl/internal/api"
 	"github.com/diegoparras/searchgirl/internal/auth"
 	"github.com/diegoparras/searchgirl/internal/fetch"
 	"github.com/diegoparras/searchgirl/internal/llm"
 	"github.com/diegoparras/searchgirl/internal/mcpsrv"
+	"github.com/diegoparras/searchgirl/internal/novedades"
 	"github.com/diegoparras/searchgirl/internal/search"
 	"github.com/diegoparras/searchgirl/internal/tokens"
 	"github.com/diegoparras/searchgirl/internal/web"
@@ -24,6 +26,10 @@ import (
 // launches the binary per session). With -http it is the long-running
 // service: UI at /, JSON API at /api/*, MCP at /mcp.
 func cmdServe(args []string) error {
+	// Lo primero que se ve en los registros al levantar: version y que cambia
+	// (CHANGELOG embebido). Va a stderr: en modo stdio, stdout es del MCP.
+	cartelArranque(os.Stderr, searchgirl.Changelog, version)
+
 	fs := flag.NewFlagSet("serve", flag.ExitOnError)
 	httpAddr := fs.String("http", os.Getenv("SEARCHGIRL_ADDR"), "serve over HTTP on this address (e.g. :8080); empty = MCP over stdio")
 	_ = fs.Parse(args)
@@ -58,6 +64,7 @@ func cmdServe(args []string) error {
 	mux.Handle("/mcp", handler)
 	mux.HandleFunc("/healthz", func(w http.ResponseWriter, r *http.Request) { _, _ = w.Write([]byte("ok")) })
 	apiSrv := api.New(svc, version)
+	apiSrv.Novedades = novedades.Parsear(searchgirl.Changelog)
 	apiSrv.Reader = reader
 	apiSrv.Answer = ans
 	apiSrv.Store = store

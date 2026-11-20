@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -16,6 +17,7 @@ import (
 	"github.com/diegoparras/searchgirl/internal/answer"
 	"github.com/diegoparras/searchgirl/internal/fetch"
 	"github.com/diegoparras/searchgirl/internal/llm"
+	"github.com/diegoparras/searchgirl/internal/novedades"
 	"github.com/diegoparras/searchgirl/internal/search"
 	"github.com/diegoparras/searchgirl/internal/tokens"
 )
@@ -27,6 +29,9 @@ type Server struct {
 	Store   *llm.Store    // runtime-switchable LLM config (settings panel)
 	Tokens  *tokens.Store // UI-issued Bearer tokens (Conexión MCP panel)
 	Version string
+	// Novedades por version (del CHANGELOG embebido): aviso en la UI tras
+	// una actualizacion y historial del menu.
+	Novedades []novedades.Version
 
 	// AuthMode, LLM info and IsAdmin are injected by cmd/serve so this package
 	// stays decoupled from auth and llm. Nil-safe defaults apply.
@@ -51,6 +56,7 @@ func (s *Server) Mount(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/engines", s.handleEngines)
 	mux.HandleFunc("GET /api/categories", s.handleCategories)
 	mux.HandleFunc("GET /api/config", s.handleConfig)
+	mux.HandleFunc("GET /api/novedades", s.handleNovedades)
 	mux.HandleFunc("POST /api/read", s.handleRead)
 	mux.HandleFunc("POST /api/answer", s.handleAnswer)
 	if s.Reader != nil {
@@ -214,6 +220,26 @@ func (s *Server) handleConfig(w http.ResponseWriter, r *http.Request) {
 		},
 		"searxng_ok": s.Search.Healthy(ctx),
 	})
+}
+
+var reSemver = regexp.MustCompile(`^\d+\.\d+\.\d+$`)
+
+// handleNovedades: GET /api/novedades?desde=X.Y.Z -> que cambio desde la
+// ultima version vista en ese navegador hasta la que corre; ?todas=1 -> el
+// historial hasta la actual. Detras del mismo gate que el resto de /api.
+func (s *Server) handleNovedades(w http.ResponseWriter, r *http.Request) {
+	qs := r.URL.Query()
+	var vs []novedades.Version
+	if qs.Get("todas") == "1" {
+		vs = novedades.Hasta(s.Novedades, s.Version)
+	} else {
+		vista := qs.Get("desde")
+		if !reSemver.MatchString(vista) {
+			vista = ""
+		}
+		vs = novedades.Desde(s.Novedades, vista, s.Version)
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"version": s.Version, "versiones": vs})
 }
 
 // isBadRequest tells validation errors (the caller's fault) apart from

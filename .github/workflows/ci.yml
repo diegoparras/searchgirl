@@ -13,8 +13,8 @@ jobs:
   test:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
-      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5 # v7.1.0
         with:
           # 'stable' = última patch (stdlib parcheada). go.mod solo fija el
           # mínimo; usar la exacta dejaría CVEs de stdlib en el binario.
@@ -25,35 +25,66 @@ jobs:
         run: go run golang.org/x/vuln/cmd/govulncheck@latest ./...
 
   image:
-    # Publica ghcr.io/diegoparras/searchgirl en cada push a main (latest) y en
-    # cada tag v* (versionado). Los PRs solo corren tests.
+    # Publica ghcr.io/diegoparras/searchgirl en cada push a main (:latest +
+    # :X.Y.Z de la constante version + Release vX.Y.Z con las notas de esa
+    # version del CHANGELOG.md) y en cada tag v* (:X.Y.Z + :X.Y). Los PRs solo
+    # corren tests. Cada version dice que cambia: sin su seccion en el
+    # CHANGELOG la imagen no sale.
     if: github.event_name == 'push'
     needs: test
     runs-on: ubuntu-latest
     permissions:
-      contents: read
+      contents: write # crear el tag y el Release de la version
       packages: write # solo este job publica la imagen a GHCR
     steps:
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
-      - uses: docker/setup-qemu-action@c7c53464625b32c7a7e944ae62b3e17d2b600130 # v3
-      - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
-      - uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5 # v7.1.0
+        with:
+          go-version: stable
+      - name: Version y novedades (CHANGELOG)
+        id: ver
+        run: |
+          V="$(go run ./cmd/searchgirl notas -version)"
+          go run ./cmd/searchgirl notas > "$RUNNER_TEMP/notas.md"
+          echo "version=$V" >> "$GITHUB_OUTPUT"
+          {
+            echo "## Searchgirl v$V"
+            echo
+            cat "$RUNNER_TEMP/notas.md"
+          } >> "$GITHUB_STEP_SUMMARY"
+      - uses: docker/setup-qemu-action@99012661954931238ded8c8b007157a8430204e1 # v4.4.0
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+      - uses: docker/login-action@8aa5831fb8d48d8f76594c7ddde61ae58019f550 # v4.8.0
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-      - uses: docker/metadata-action@c299e40c65443455700f0fdfc63efafe5b349051 # v5
+      - uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6.2.0
         id: meta
         with:
           images: ghcr.io/diegoparras/searchgirl
           tags: |
             type=raw,value=latest,enable={{is_default_branch}}
+            type=raw,value=${{ steps.ver.outputs.version }},enable={{is_default_branch}}
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
-      - uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
+          labels: |
+            org.opencontainers.image.version=${{ steps.ver.outputs.version }}
+      - uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
         with:
           context: .
           platforms: linux/amd64,linux/arm64
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+      - name: Release de la version
+        if: github.ref == 'refs/heads/main'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          V: ${{ steps.ver.outputs.version }}
+        run: |
+          if gh release view "v$V" >/dev/null 2>&1; then
+            echo "::warning::La v$V ya estaba publicada: este deploy no subio la version (patch) ni sumo novedades."
+          else
+            gh release create "v$V" --target "$GITHUB_SHA" --title "Searchgirl v$V" --notes-file "$RUNNER_TEMP/notas.md"
+          fi

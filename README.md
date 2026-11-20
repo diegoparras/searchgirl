@@ -154,6 +154,17 @@ Guía punta a punta para **Easypanel** (servicios, mounts, dominio, HTTPS, troub
 de este repo, seteá `SEARXNG_SECRET` (y `COOKIE_SECURE=1` si el panel te da HTTPS) y publicá
 el puerto 8089 detrás del reverse proxy del panel.
 
+### Versión y novedades de cada deploy
+
+Cada deploy sube el *patch* de la versión (la constante `version` de `cmd/searchgirl/main.go`)
+y agrega su sección `## [X.Y.Z]` al [CHANGELOG.md](CHANGELOG.md), que va embebido en el binario
+(un test y el CI exigen esa sección: sin ella la imagen no se publica). Lo primero que escribe el
+contenedor al levantar (en EasyPanel: servicio > Registros) es un cartel con la versión, la fecha
+y qué cambia. En la interfaz, al entrar después de una actualización aparece una sola vez el
+aviso **Novedades** (el historial queda en el menú y en **Acerca de**, "Qué cambió"). En GitHub,
+la imagen se etiqueta también `:X.Y.Z` y se crea el Release `vX.Y.Z` con esas notas;
+`searchgirl notas` las imprime en markdown.
+
 ## SearXNG por dentro
 
 La config vive en [`searxng/settings.yml`](searxng/settings.yml):

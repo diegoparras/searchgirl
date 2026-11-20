@@ -7,6 +7,8 @@ FROM golang:1.26@sha256:f92b729f5f76b045df75ee1cb324ea68658bbc82feecd286c6ce08bf
 WORKDIR /src
 COPY go.mod go.sum ./
 RUN go mod download
+# COPY . . trae el CHANGELOG.md: va embebido en el binario (//go:embed) y de
+# ahi salen la version y las novedades del cartel de arranque y de la UI.
 COPY . .
 RUN CGO_ENABLED=0 GOOS=linux go build -buildvcs=false -ldflags="-s -w" -o /searchgirl ./cmd/searchgirl
 

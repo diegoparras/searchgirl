@@ -35,7 +35,7 @@ func TestTokenGate(t *testing.T) {
 	defer srv.Close()
 
 	// Sin token: 401 en rutas protegidas, 200 en el shell.
-	for path, want := range map[string]int{"/api/search": 401, "/mcp": 401, "/thumb": 401, "/": 200, "/app.css": 200, "/healthz": 200} {
+	for path, want := range map[string]int{"/api/search": 401, "/api/novedades": 401, "/mcp": 401, "/thumb": 401, "/": 200, "/app.css": 200, "/healthz": 200} {
 		resp, _ := http.Get(srv.URL + path)
 		resp.Body.Close()
 		if resp.StatusCode != want {

@@ -58,6 +58,9 @@ async function init() {
     wireConn();
   }
 
+  // Novedades: una sola vez por navegador después de cada actualización.
+  setTimeout(avisarNovedades, 400);
+
   // Estado desde la URL (compartible / botón atrás).
   readURL();
   if (state.q) runSearch({ push: false });
@@ -111,7 +114,7 @@ function wireChrome() {
   kebab.addEventListener("click", (e) => { e.stopPropagation(); menu.classList.toggle("hidden"); });
   document.addEventListener("click", (e) => { if (!menu.contains(e.target)) menu.classList.add("hidden"); });
   document.addEventListener("keydown", (e) => {
-    if (e.key === "Escape") { menu.classList.add("hidden"); $("#aboutModal").classList.add("hidden"); $("#settingsModal").classList.add("hidden"); $("#connModal").classList.add("hidden"); }
+    if (e.key === "Escape") { menu.classList.add("hidden"); $("#aboutModal").classList.add("hidden"); $("#settingsModal").classList.add("hidden"); $("#connModal").classList.add("hidden"); $("#novModal").classList.add("hidden"); }
   });
 
   const toggle = $("#themeToggle");
@@ -130,6 +133,13 @@ function wireChrome() {
   $("#aboutBtn").addEventListener("click", () => { menu.classList.add("hidden"); $("#aboutModal").classList.remove("hidden"); });
   $("#aboutClose").addEventListener("click", () => $("#aboutModal").classList.add("hidden"));
   $("#aboutModal").addEventListener("click", (e) => { if (e.target === $("#aboutModal")) $("#aboutModal").classList.add("hidden"); });
+
+  $("#novBtn").addEventListener("click", () => { menu.classList.add("hidden"); novedadesTodas(); });
+  $("#aboutNov").addEventListener("click", () => { $("#aboutModal").classList.add("hidden"); novedadesTodas(); });
+  const cerrarNov = () => $("#novModal").classList.add("hidden");
+  $("#novClose").addEventListener("click", cerrarNov);
+  $("#novOk").addEventListener("click", cerrarNov);
+  $("#novModal").addEventListener("click", (e) => { if (e.target === $("#novModal")) cerrarNov(); });
 
   $("#homeLink").addEventListener("click", (e) => { e.preventDefault(); showHome(); history.pushState({}, "", "/"); });
 }
@@ -713,6 +723,75 @@ function copyText(text, btn) {
     btn.textContent = "copiado ✓";
     setTimeout(() => { btn.textContent = prev; }, 1400);
   }).catch(() => { /* clipboard bloqueado: sin feedback */ });
+}
+
+/* ---------- novedades: qué cambió en cada versión (sale del CHANGELOG) ---------- */
+
+const NOV_KEY = "searchgirl.versionVista";
+
+// Markdown mínimo de las notas (**negrita** y `código`) armado con nodos: el
+// texto entra siempre por textContent, nunca como HTML.
+function novInline(parent, text) {
+  const s = String(text);
+  const re = /\*\*(.+?)\*\*|`([^`]+)`/g;
+  let last = 0, m;
+  while ((m = re.exec(s))) {
+    if (m.index > last) parent.append(s.slice(last, m.index));
+    parent.append(m[1] !== undefined ? el("strong", "", m[1]) : el("code", "", m[2]));
+    last = re.lastIndex;
+  }
+  if (last < s.length) parent.append(s.slice(last));
+}
+
+function showNovedades(versiones, bajada) {
+  const b = $("#novBajada");
+  b.textContent = "";
+  novInline(b, bajada);
+  const lista = $("#novLista");
+  lista.textContent = "";
+  const vs = arr(versiones);
+  if (Array.isArray(versiones) && !vs.length) lista.append(el("p", "", "No hay notas para esta versión."));
+  for (const v of vs) {
+    const head = el("div", "nov-ver");
+    head.append(el("b", "", "v" + v.version));
+    if (v.fecha) head.append(el("span", "", v.fecha));
+    lista.append(head);
+    for (const sec of arr(v.secciones)) {
+      lista.append(el("div", "nov-sec", sec.titulo));
+      const ul = el("ul", "nov-list");
+      for (const it of arr(sec.items)) { const li = el("li"); novInline(li, it); ul.append(li); }
+      lista.append(ul);
+    }
+  }
+  $("#novModal").classList.remove("hidden");
+  $("#novModal .modal-card").scrollTop = 0; // se lee desde arriba
+  $("#novOk").focus({ preventScroll: true });
+}
+
+async function avisarNovedades() {
+  let vista = null;
+  try { vista = localStorage.getItem(NOV_KEY); } catch { /* storage bloqueado */ }
+  let r;
+  try {
+    const resp = await fetch("/api/novedades" + (vista ? "?desde=" + encodeURIComponent(vista) : ""));
+    if (!resp.ok) return;
+    r = await resp.json();
+  } catch { return; }
+  try { localStorage.setItem(NOV_KEY, r.version); } catch { /* storage bloqueado */ }
+  if (vista === r.version || !arr(r.versiones).length) return;
+  if (document.querySelector(".modal-back:not(.hidden)")) return; // no tapar otro modal
+  showNovedades(r.versiones, "Searchgirl se actualizó a la **v" + r.version + "**. Esto cambió desde la última versión que viste:");
+}
+
+async function novedadesTodas() {
+  try {
+    const resp = await fetch("/api/novedades?todas=1");
+    if (!resp.ok) throw new Error(String(resp.status));
+    const r = await resp.json();
+    showNovedades(arr(r.versiones).slice(0, 15), "Versión instalada: **v" + r.version + "**. Últimas versiones, de la más nueva a la más vieja:");
+  } catch {
+    showNovedades(null, "No se pudieron cargar las novedades.");
+  }
 }
 
 /* ---------- util ---------- */
