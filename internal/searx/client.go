@@ -67,6 +67,11 @@ type Params struct {
 	SafeSearch int
 	Page       int
 	Engines    []string
+	// Tokens habilita los motores privados de SearXNG: un motor con
+	// `tokens: [...]` en settings.yml sólo se consulta si el pedido trae uno
+	// de sus tokens. Sin tokens, SearXNG ni lo consulta, sea por categoría,
+	// por engines= o por !bang.
+	Tokens []string
 }
 
 // Search runs one metasearch and returns the normalized response.
@@ -92,6 +97,9 @@ func (c *Client) Search(ctx context.Context, p Params) (*Response, error) {
 	}
 	if len(p.Engines) > 0 {
 		v.Set("engines", strings.Join(p.Engines, ","))
+	}
+	if len(p.Tokens) > 0 {
+		v.Set("tokens", strings.Join(p.Tokens, ","))
 	}
 
 	start := time.Now()

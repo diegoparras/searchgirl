@@ -34,6 +34,9 @@ services:
       # Tokens Bearer para agentes: varios con nombre, separados por coma
       # (ej. "claude:abc...,n8n:def..."). Revocar uno = sacarlo y reiniciar.
       SEARCHGIRL_MCP_TOKEN: ${SEARCHGIRL_MCP_TOKEN:-}
+      # Motores privados de SearXNG (p. ej. braveapi con tokens:) sólo para
+      # estos clientes, por el nombre de su token: "secretaria:TOKEN_INTERNO".
+      SEARCHGIRL_SEARXNG_TOKENS: ${SEARCHGIRL_SEARXNG_TOKENS:-}
       # Detrás de un reverse proxy: sus IPs/CIDRs para que el rate limit use
       # la IP real del cliente (X-Forwarded-For). Ej: 172.16.0.0/12
       SEARCHGIRL_TRUSTED_PROXIES: ${SEARCHGIRL_TRUSTED_PROXIES:-}

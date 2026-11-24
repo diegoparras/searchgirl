@@ -286,8 +286,16 @@ func (a *Auth) authorized(r *http.Request) bool {
 // configured token (constant-time compare over sha256, no early-exit timing
 // leak) and returns the matched token's name.
 func (a *Auth) bearerToken(r *http.Request) (string, bool) {
+	return a.TokenName(r.Header)
+}
+
+// TokenName dice qué token Bearer trae un pedido, por su nombre: el de
+// SEARCHGIRL_MCP_TOKEN o la etiqueta del emitido desde el panel Conexión.
+// Recibe los headers y no el pedido porque las herramientas MCP sólo tienen
+// los headers de la llamada (req.Extra.Header), no el *http.Request.
+func (a *Auth) TokenName(hdr http.Header) (string, bool) {
 	const p = "Bearer "
-	h := r.Header.Get("Authorization")
+	h := hdr.Get("Authorization")
 	if !strings.HasPrefix(h, p) {
 		return "", false
 	}

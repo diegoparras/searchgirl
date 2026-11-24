@@ -40,7 +40,8 @@ func cmdServe(args []string) error {
 	// activo (elegido desde la UI) y cae al de env cuando no hay nada guardado.
 	store := llm.NewStore(os.Getenv("SEARCHGIRL_CONFIG_DIR"), llm.FromEnv())
 	ans := &answer.Engine{Search: svc, Reader: reader, Provider: store}
-	srv := mcpsrv.New(svc, mcpsrv.Options{Version: version, Reader: reader, Answer: ans})
+	mcpOpts := mcpsrv.Options{Version: version, Reader: reader, Answer: ans}
+	srv := mcpsrv.New(svc, mcpOpts)
 
 	if *httpAddr == "" {
 		return srv.Run(context.Background(), &mcp.StdioTransport{})
@@ -59,6 +60,10 @@ func cmdServe(args []string) error {
 		return err
 	}
 
+	// Por HTTP, cada llamada MCP se identifica por su token: es lo que decide
+	// qué motores privados de SearXNG puede usar (SEARCHGIRL_SEARXNG_TOKENS).
+	mcpOpts.Caller = authn.TokenName
+	srv = mcpsrv.New(svc, mcpOpts)
 	handler := mcp.NewStreamableHTTPHandler(func(*http.Request) *mcp.Server { return srv }, nil)
 	mux := http.NewServeMux()
 	mux.Handle("/mcp", handler)
@@ -87,7 +92,8 @@ func cmdServe(args []string) error {
 	authn.RegisterRoutes(mux) // accesorio: OIDC login (solo federado)
 
 	tls := os.Getenv("COOKIE_SECURE") == "1"
-	var h http.Handler = authn.Gate(mux)    // auth (cookie o Bearer)
+	var h http.Handler = callerFromToken(authn.TokenName, mux)
+	h = authn.Gate(h)                       // auth (cookie o Bearer)
 	h = newIPLimiterFromEnv().middleware(h) // rate limit por IP (config por .env)
 	h = securityHeaders(h, tls)             // headers conservadores
 
@@ -109,4 +115,17 @@ func cmdServe(args []string) error {
 		MaxHeaderBytes:    1 << 20,
 	}
 	return server.ListenAndServe()
+}
+
+// callerFromToken deja en el contexto del pedido el nombre del token Bearer
+// que lo trae, para que la búsqueda (API y Respuesta IA) sepa quién pregunta
+// y le habilite sólo sus motores privados. Una sesión de la interfaz no trae
+// token: busca sin motores privados.
+func callerFromToken(name func(http.Header) (string, bool), next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if n, ok := name(r.Header); ok {
+			r = r.WithContext(search.WithCaller(r.Context(), n))
+		}
+		next.ServeHTTP(w, r)
+	})
 }

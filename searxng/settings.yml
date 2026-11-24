@@ -126,11 +126,18 @@ engines:
   # Brave Search API: índice propio de Brave por API oficial con clave. No
   # bloquea la IP (se paga por pedido), así que sale directo, sin proxy.
   # Cada búsqueda de General gasta 1 pedido (20 resultados) y cada página más,
-  # otro. Para habilitarla, descomentá las 4 líneas y poné tu clave, SÓLO en el
-  # settings.yml del servidor. Ver DEPLOY.md, "Brave Search API sin pasarte de
-  # presupuesto".
+  # otro.
+  #
+  # Es un motor PRIVADO: con `tokens`, SearXNG sólo lo consulta si el pedido
+  # trae uno de esos tokens, y Searchgirl sólo se lo pasa a los clientes de
+  # SEARCHGIRL_SEARXNG_TOKENS. Sin esa variable, nadie usa Brave.
+  #
+  # Para habilitarla, descomentá las 5 líneas y poné tu clave y un token
+  # interno largo al azar, SÓLO en el settings.yml del servidor. Ver DEPLOY.md,
+  # "Brave Search API sin pasarte de presupuesto".
   # - name: braveapi
   #   api_key: "TU_CLAVE_DE_BRAVE"
+  #   tokens: ["TOKEN_INTERNO_AL_AZAR"]
   #   inactive: false
   #   disabled: false
   - name: wikidata

@@ -144,6 +144,31 @@ func TestSearchNormalizes(t *testing.T) {
 	}
 }
 
+// TestSearchTokens: los tokens de motores privados viajan como "tokens" y,
+// sin tokens, el parámetro no se manda (ni vacío).
+func TestSearchTokens(t *testing.T) {
+	var got url.Values
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		got = r.URL.Query()
+		_, _ = w.Write([]byte(fixture))
+	}))
+	defer ts.Close()
+	c := New(ts.URL, 5*time.Second)
+
+	if _, err := c.Search(context.Background(), Params{Query: "x", Tokens: []string{"t1", "t2"}}); err != nil {
+		t.Fatal(err)
+	}
+	if got.Get("tokens") != "t1,t2" {
+		t.Errorf("tokens = %q, want t1,t2", got.Get("tokens"))
+	}
+	if _, err := c.Search(context.Background(), Params{Query: "x"}); err != nil {
+		t.Fatal(err)
+	}
+	if _, present := got["tokens"]; present {
+		t.Errorf("sin tokens no debe mandarse el parámetro, llegó %q", got.Get("tokens"))
+	}
+}
+
 func TestSearch403ExplainsFormats(t *testing.T) {
 	ts := newTestServer(t, url.Values{}, http.StatusForbidden, "")
 	defer ts.Close()

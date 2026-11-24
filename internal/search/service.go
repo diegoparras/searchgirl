@@ -25,6 +25,11 @@ type Service struct {
 	// de engines con TTL largo.
 	SearchCache  *cache.Cache
 	EnginesCache *cache.Cache
+
+	// EngineTokens habilita motores privados de SearXNG por cliente: nombre
+	// del token Bearer (en minúsculas) -> tokens que se le pasan a SearXNG.
+	// Quien no figura busca sin motores privados.
+	EngineTokens map[string][]string
 }
 
 // FromEnv builds the service the way the container runs it:
@@ -33,6 +38,7 @@ type Service struct {
 //	SEARXNG_TIMEOUT              per-search timeout (default 10s)
 //	SEARCHGIRL_DEFAULT_LANGUAGE  default language (default es)
 //	SEARCHGIRL_SAFESEARCH        default safesearch 0|1|2 (default 0)
+//	SEARCHGIRL_SEARXNG_TOKENS    motores privados por cliente: nombre:token,...
 func FromEnv() *Service {
 	base := os.Getenv("SEARXNG_URL")
 	if base == "" {
@@ -72,6 +78,7 @@ func FromEnv() *Service {
 		DefaultSafe:     safe,
 		SearchCache:     cache.New(cacheTTL, cacheMax),
 		EnginesCache:    cache.New(time.Hour, 4),
+		EngineTokens:    ParseEngineTokens(os.Getenv("SEARCHGIRL_SEARXNG_TOKENS")),
 	}
 }
 
@@ -120,10 +127,14 @@ func (s *Service) Search(ctx context.Context, q Query) (*searx.Response, error) 
 		SafeSearch: safe,
 		Page:       q.Page,
 		Engines:    q.Engines,
+		Tokens:     s.EngineTokens[strings.ToLower(CallerFrom(ctx))],
 	}
-	key := fmt.Sprintf("%s|%s|%s|%s|%d|%d|%s",
+	// Los tokens van en la clave: un resultado con motores privados no se le
+	// sirve desde la caché a quien no los tiene, ni al revés.
+	key := fmt.Sprintf("%s|%s|%s|%s|%d|%d|%s|%s",
 		strings.ToLower(params.Query), params.Category, params.Language,
-		params.TimeRange, params.SafeSearch, params.Page, strings.Join(params.Engines, ","))
+		params.TimeRange, params.SafeSearch, params.Page, strings.Join(params.Engines, ","),
+		strings.Join(params.Tokens, ","))
 	val, cached, err := s.SearchCache.Do(key, func() (any, error) {
 		return s.Client.Search(ctx, params)
 	})

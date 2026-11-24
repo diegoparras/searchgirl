@@ -11,10 +11,16 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/es/1.1.0/); vers
   DuckDuckGo, DuckDuckGo web, Bing, Yahoo, Mojeek y Google CSE.
 - El settings.yml anota los motores probados y descartados, y los que funcionan con API key
   (braveapi, kagi, exaapi, marginalia, yandex_api).
-- **Brave Search API lista para habilitar**: entrada `braveapi` comentada en el settings.yml (la
-  clave va sólo en el servidor), que sale directo y no por el proxy. DEPLOY.md, "Brave Search
-  API sin pasarte de presupuesto": cuánto gasta cada búsqueda, qué plan usar y cómo poner el
-  tope del lado de Brave.
+- **Motores privados por cliente** (`SEARCHGIRL_SEARXNG_TOKENS=nombre:token,...`): un motor de
+  SearXNG con `tokens: [...]` sólo se consulta cuando busca el cliente cuyo token Bearer se llama
+  `nombre`, por la API, la Respuesta IA o el MCP. La interfaz y cualquier otro token buscan sin
+  él. Sirve para una API paga con cupo: probado de punta a punta, el token `secretaria` consulta
+  `braveapi` por API y por MCP, y `custodia` no. Sin la variable, nadie usa motores privados. La
+  caché separa las búsquedas con y sin motores privados.
+- **Brave Search API lista para habilitar** como motor privado: entrada `braveapi` comentada en
+  el settings.yml (la clave y el token interno van sólo en el servidor), que sale directo y no
+  por el proxy. DEPLOY.md, "Brave Search API sin pasarte de presupuesto": cómo habilitarla para
+  un solo cliente, cuánto gasta, qué plan usar y cómo poner el tope del lado de Brave.
 
 ## [0.6.4] — 2026-11-24
 

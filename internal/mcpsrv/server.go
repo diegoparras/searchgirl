@@ -6,6 +6,7 @@ package mcpsrv
 import (
 	"context"
 	"fmt"
+	"net/http"
 	"strings"
 
 	"github.com/diegoparras/searchgirl/internal/answer"
@@ -19,6 +20,23 @@ type Options struct {
 	Version string
 	Reader  *fetch.Reader
 	Answer  *answer.Engine
+	// Caller identifica al cliente por los headers de la llamada (el nombre
+	// del token Bearer). Hace falta acá y no en un middleware: el contexto de
+	// una herramienta es el de la sesión MCP, no el del pedido HTTP. nil (stdio)
+	// = sin nombre.
+	Caller func(http.Header) (string, bool)
+}
+
+// withCaller deja en el contexto el nombre del token que hizo esta llamada,
+// para que el servicio decida qué motores privados habilita.
+func (o Options) withCaller(ctx context.Context, req *mcp.CallToolRequest) context.Context {
+	if o.Caller == nil || req == nil || req.Extra == nil || req.Extra.Header == nil {
+		return ctx
+	}
+	if name, ok := o.Caller(req.Extra.Header); ok {
+		return search.WithCaller(ctx, name)
+	}
+	return ctx
 }
 
 // New builds the MCP server. One `search` tool with a category parameter
@@ -42,7 +60,7 @@ func New(svc *search.Service, opts Options) *mcp.Server {
 		if in.SafeSearch != nil {
 			q.SafeSearch = in.SafeSearch
 		}
-		resp, err := svc.Search(ctx, q)
+		resp, err := svc.Search(opts.withCaller(ctx, req), q)
 		if err != nil {
 			return errResult(err), nil, nil
 		}
@@ -86,7 +104,7 @@ func New(svc *search.Service, opts Options) *mcp.Server {
 			Description: "Search the web and synthesize a concise answer with numbered citations [1][2] " +
 				"backed by the sources. Use fetch_pages=true for a deeper (slower) read of each source.",
 		}, func(ctx context.Context, req *mcp.CallToolRequest, in answerIn) (*mcp.CallToolResult, any, error) {
-			res, err := opts.Answer.Answer(ctx, answer.Request{
+			res, err := opts.Answer.Answer(opts.withCaller(ctx, req), answer.Request{
 				Query: in.Query, Category: in.Category, Language: in.Language,
 				MaxSources: in.MaxSources, FetchPages: in.FetchPages,
 			})

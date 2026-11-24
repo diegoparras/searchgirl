@@ -165,13 +165,35 @@ incluso desde una IP hogareña. Con el proxy se pueden probar poniendo `disabled
 
 ### Brave Search API sin pasarte de presupuesto
 
-La API oficial de Brave suma su índice sin bloqueos, porque se paga por pedido. En
-`searxng/settings.yml` está la entrada `braveapi` comentada: en el File Mount del servidor,
-descomentá sus cuatro líneas y poné tu clave. Sale directo, sin proxy.
+La API oficial de Brave suma su índice sin bloqueos, porque se paga por pedido. Para que el cupo
+no se lo coma cualquiera, va como **motor privado**: SearXNG sólo lo consulta cuando el pedido
+trae su token interno, y Searchgirl sólo se lo pasa a los clientes que vos elijas. Todos los
+demás (la interfaz, Custodia, cualquier otro token) buscan sin Brave. Sale directo, sin proxy.
 
-**Cuánto gasta.** Cada búsqueda de General es 1 pedido (20 resultados) y cada "Más resultados",
-otro. Las otras categorías no la usan. Custodia pide 3 páginas por consulta en su corrida
-diaria: son 3 pedidos por consulta por día, y suele ser lo que más consume.
+1. **Token interno.** Generá un texto largo al azar (`openssl rand -hex 24`). No es la clave de
+   Brave: sólo une SearXNG con Searchgirl.
+2. **Servicio `searxng`**, File Mount: descomentá la entrada `braveapi` del final y completala:
+   ```yaml
+     - name: braveapi
+       api_key: "TU_CLAVE_DE_BRAVE"
+       tokens: ["EL_TOKEN_INTERNO"]
+       inactive: false
+       disabled: false
+   ```
+   **Deploy** de `searxng`.
+3. **Servicio `app`**, Environment: decí qué cliente puede usarlo, por el nombre de su token
+   Bearer (el de `SEARCHGIRL_MCP_TOKEN` o la etiqueta con que lo emitiste en el panel
+   Conexión; sin distinguir mayúsculas):
+   ```
+   SEARCHGIRL_SEARXNG_TOKENS=secretaria:EL_TOKEN_INTERNO
+   ```
+   **Deploy** de `app`. Para sumar otro cliente: `secretaria:EL_TOKEN_INTERNO,otro:EL_TOKEN_INTERNO`.
+
+Sin la variable del paso 3, nadie usa Brave: si se olvida, no se gasta nada. En los registros de
+`searxng`, una búsqueda de ese cliente consulta `braveapi` y la de cualquier otro, no.
+
+**Cuánto gasta.** Cada búsqueda de General de ese cliente es 1 pedido (20 resultados) y cada
+página más, otro. Las otras categorías no la usan.
 
 **Qué plan usar.** En el panel de Brave (api-dashboard.search.brave.com):
 

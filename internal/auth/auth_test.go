@@ -278,6 +278,37 @@ func TestMeReportsMode(t *testing.T) {
 	}
 }
 
+func TestTokenNameFromHeaders(t *testing.T) {
+	a := &Auth{enabled: true, tokens: parseTokens("secretaria:abc123,custodia:def456")}
+	a.SetVerifier(func(secret string) (string, bool) {
+		if secret == "sg_panel" {
+			return "SecretarIA", true
+		}
+		return "", false
+	})
+	cases := []struct {
+		header, want string
+		ok           bool
+	}{
+		{"Bearer abc123", "secretaria", true},
+		{"Bearer def456", "custodia", true},
+		{"Bearer sg_panel", "SecretarIA", true}, // emitido desde el panel
+		{"Bearer otro", "", false},
+		{"", "", false},
+		{"Basic abc123", "", false},
+	}
+	for _, c := range cases {
+		h := http.Header{}
+		if c.header != "" {
+			h.Set("Authorization", c.header)
+		}
+		got, ok := a.TokenName(h)
+		if got != c.want || ok != c.ok {
+			t.Errorf("TokenName(%q) = %q,%v; want %q,%v", c.header, got, ok, c.want, c.ok)
+		}
+	}
+}
+
 func TestMultiTokenNamedAndRevocable(t *testing.T) {
 	a := &Auth{enabled: true, tokens: parseTokens("claude:abc123, n8n:def456, suelto789")}
 	srv := httptest.NewServer(a.Gate(okHandler()))
