@@ -123,6 +123,16 @@ engines:
     disabled: true
   - name: brave
     disabled: true
+  # Brave Search API: índice propio de Brave por API oficial con clave. No
+  # bloquea la IP (se paga por pedido), así que sale directo, sin proxy.
+  # Cada búsqueda de General gasta 1 pedido (20 resultados) y cada página más,
+  # otro. Para habilitarla, descomentá las 4 líneas y poné tu clave, SÓLO en el
+  # settings.yml del servidor. Ver DEPLOY.md, "Brave Search API sin pasarte de
+  # presupuesto".
+  # - name: braveapi
+  #   api_key: "TU_CLAVE_DE_BRAVE"
+  #   inactive: false
+  #   disabled: false
   - name: wikidata
     # La consulta SPARQL de Wikidata tarda; con 3 s (el valor por defecto)
     # se corta seguido y figura como "sin respuesta".

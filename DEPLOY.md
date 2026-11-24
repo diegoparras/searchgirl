@@ -163,6 +163,28 @@ Google y Brave quedan apagados: el 2026-11-24, con SearXNG 2026.11.23, respondí
 incluso desde una IP hogareña. Con el proxy se pueden probar poniendo `disabled: false` y
 `network: residencial` en su entrada.
 
+### Brave Search API sin pasarte de presupuesto
+
+La API oficial de Brave suma su índice sin bloqueos, porque se paga por pedido. En
+`searxng/settings.yml` está la entrada `braveapi` comentada: en el File Mount del servidor,
+descomentá sus cuatro líneas y poné tu clave. Sale directo, sin proxy.
+
+**Cuánto gasta.** Cada búsqueda de General es 1 pedido (20 resultados) y cada "Más resultados",
+otro. Las otras categorías no la usan. Custodia pide 3 páginas por consulta en su corrida
+diaria: son 3 pedidos por consulta por día, y suele ser lo que más consume.
+
+**Qué plan usar.** En el panel de Brave (api-dashboard.search.brave.com):
+
+- **Plan Free**: 2000 pedidos por mes y 1 por segundo, sin costo. Es el primero que conviene.
+  El cupo es uno solo para todas las claves de ese plan: si otra app ya usa una clave del Free,
+  comparten los 2000. Mirá el consumo en **Usage limits** antes de sumar Searchgirl.
+- **Plan Search**: se cobra por cada 1000 pedidos e incluye un crédito mensual gratis. Si lo usás,
+  en **Usage limits** poné un tope mensual en dólares en ese plan: es la única garantía real de
+  no pasarte, porque la corta Brave.
+
+**Qué pasa al llegar al tope.** Brave rechaza los pedidos, SearXNG marca `braveapi` "sin
+respuesta" y General sigue con los otros motores. No se rompe nada; vuelve el mes siguiente.
+
 ---
 
 ## Otros paneles / VPS pelado

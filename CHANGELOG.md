@@ -11,6 +11,10 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/es/1.1.0/); vers
   DuckDuckGo, DuckDuckGo web, Bing, Yahoo, Mojeek y Google CSE.
 - El settings.yml anota los motores probados y descartados, y los que funcionan con API key
   (braveapi, kagi, exaapi, marginalia, yandex_api).
+- **Brave Search API lista para habilitar**: entrada `braveapi` comentada en el settings.yml (la
+  clave va sólo en el servidor), que sale directo y no por el proxy. DEPLOY.md, "Brave Search
+  API sin pasarte de presupuesto": cuánto gasta cada búsqueda, qué plan usar y cómo poner el
+  tope del lado de Brave.
 
 ## [0.6.4] — 2026-11-24
 
