@@ -2,6 +2,18 @@
 
 Formato basado en [Keep a Changelog](https://keepachangelog.com/es/1.1.0/); versionado [SemVer](https://semver.org/lang/es/).
 
+## [0.6.4] — 2026-11-24
+
+### Añadido
+- **Más motores en General, todos por el proxy**: `duckduckgo web`, que usa la API d.js del
+  navegador y no la versión HTML que tira captcha, y Yahoo, para no depender sólo de Bing.
+  Probados desde una IP hogareña: 34 resultados entre DuckDuckGo, DuckDuckGo web, Bing, Yahoo y
+  Google CSE, ninguno sin respuesta.
+
+### Corregido
+- **Google CSE de Imágenes salía directo desde el VPS** y lo bloqueaban ("unusual traffic"):
+  ahora también va por la red `residencial`.
+
 ## [0.6.3] — 2026-11-24
 
 ### Añadido

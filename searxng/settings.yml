@@ -74,14 +74,34 @@ outgoing:
 #     desactiva.
 # Prenderlos no suma resultados y deja "sin respuesta" en cada búsqueda. Con un
 # proxy residencial se pueden probar: disabled: false y network: residencial.
+#
+# DuckDuckGo va dos veces porque son dos puertas distintas: "duckduckgo" usa
+# html.duckduckgo.com (sin JavaScript) y "duckduckgo web" la API d.js que usa
+# el navegador. Desde algunas IPs de proxy una tira captcha y la otra no.
+# Yahoo suma un frente más para no depender sólo de Bing.
+#
+# Descartados además (probados el 2026-11-24): qwant, fireball y searchmysite
+# (access denied), yep (HTTP error), quark (crash), baidu (parsing error),
+# privacywall (es Bing por detrás), yandex (captchas, resultados sesgados) y
+# wiby (índice chico de webs personales).
 engines:
   - name: duckduckgo
     disabled: false
     network: residencial
+  - name: duckduckgo web
+    disabled: false
+    categories: [general, web]
+    network: residencial
   - name: bing
     disabled: false
     network: residencial
+  - name: yahoo
+    disabled: false
+    network: residencial
   - name: google cse
+    network: residencial
+  # Imágenes: Google CSE también bloquea la IP del VPS en esta categoría.
+  - name: google cse images
     network: residencial
   - name: google
     disabled: true

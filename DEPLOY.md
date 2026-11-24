@@ -140,15 +140,24 @@ localmente no se ve.
 Para confirmarlo: Easypanel → servicio `searxng` → **Registros**, buscá `SearxEngineAccessDenied`,
 `TooManyRequests` o `CAPTCHA` junto al nombre del motor.
 
-El arreglo es el proxy residencial del paso 2. En `searxng/settings.yml` esos tres motores
-salen por la red `residencial`; Wikipedia y Wikidata, que son APIs y no bloquean, salen
-directo y no gastan tráfico del proxy. Si un pedido falla, porque no conecta o porque el
-buscador responde 403, 429 o 503, se repite una vez (`retries: 1` + `retry_on_http_error`).
-El reintento toma el proxy siguiente de la lista; con uno solo que rota la IP, sale con otra
-IP. Sin `retry_on_http_error`, SearXNG sólo reintenta cuando no conecta.
+El arreglo es el proxy residencial del paso 2. En `searxng/settings.yml` salen por la red
+`residencial` los motores de General (DuckDuckGo, DuckDuckGo web, Bing, Yahoo y Google CSE) y
+Google CSE de Imágenes. Wikipedia y Wikidata, que son APIs y no bloquean, salen directo y no
+gastan tráfico del proxy. Si un pedido falla, porque no conecta o porque el buscador responde
+403, 429 o 503, se repite una vez (`retries: 1` + `retry_on_http_error`). El reintento toma el
+proxy siguiente de la lista; con uno solo que rota la IP, sale con otra IP. Sin
+`retry_on_http_error`, SearXNG sólo reintenta cuando no conecta.
 
 Después de pegar el proxy: **Deploy** del servicio `searxng`. En los registros, los pedidos de
 esos motores aparecen como `searx.network.residencial`.
+
+**Captcha aunque pase por el proxy.** Algunos buscadores, DuckDuckGo sobre todo, marcan también
+IPs de pools residenciales. Ese captcha llega como una página normal, no como un 403, así que no
+dispara el reintento: el motor queda "sin respuesta" en esa búsqueda y vuelve a intentar en la
+siguiente, con otro proxy o con otra IP. Por eso General no depende de un solo motor:
+DuckDuckGo va por dos endpoints distintos (`duckduckgo`, la versión HTML, y `duckduckgo web`, la
+API que usa el navegador), y Bing y Yahoo son otros dos frentes. Si un motor queda "sin
+respuesta" en casi todas las búsquedas, conviene apagarlo con `disabled: true` en su entrada.
 
 Google y Brave quedan apagados: el 2026-11-24, con SearXNG 2026.11.23, respondían 403 y 429
 incluso desde una IP hogareña. Con el proxy se pueden probar poniendo `disabled: false` y
