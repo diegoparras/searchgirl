@@ -2,6 +2,16 @@
 
 Formato basado en [Keep a Changelog](https://keepachangelog.com/es/1.1.0/); versionado [SemVer](https://semver.org/lang/es/).
 
+## [0.6.5] — 2026-11-24
+
+### Añadido
+- **Mojeek en General**, por el proxy. Tiene índice propio, no es Google ni Bing por detrás, así
+  que suma resultados distintos. SearXNG lo trae inactivo porque a veces pide un captcha de
+  prueba de trabajo; probado desde una IP hogareña, respondía. General queda con seis motores:
+  DuckDuckGo, DuckDuckGo web, Bing, Yahoo, Mojeek y Google CSE.
+- El settings.yml anota los motores probados y descartados, y los que funcionan con API key
+  (braveapi, kagi, exaapi, marginalia, yandex_api).
+
 ## [0.6.4] — 2026-11-24
 
 ### Añadido

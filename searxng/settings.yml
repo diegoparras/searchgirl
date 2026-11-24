@@ -83,7 +83,15 @@ outgoing:
 # Descartados además (probados el 2026-11-24): qwant, fireball y searchmysite
 # (access denied), yep (HTTP error), quark (crash), baidu (parsing error),
 # privacywall (es Bing por detrás), yandex (captchas, resultados sesgados) y
-# wiby (índice chico de webs personales).
+# wiby (índice chico de webs personales). Segunda ronda: fastbot, zapmeta y
+# dogpile (access denied), startpage (CAPTCHA), wikimini (too many requests),
+# encyclosearch y yacy (timeout), gabanza (certificado inválido), reloado y
+# resulthunter (crash), tusksearch y wolframalpha (HTTP error), crowdview y
+# vuhuv (0 resultados). naver (buscador coreano) y fynd respondieron, pero con
+# una sola búsqueda no alcanza para sumarlos.
+#
+# Con API key (pago por consulta, no bloquean IPs) existen braveapi, kagi,
+# exaapi, marginalia y yandex_api: se agregan con su engine y su api_key.
 engines:
   - name: duckduckgo
     disabled: false
@@ -97,6 +105,14 @@ engines:
     network: residencial
   - name: yahoo
     disabled: false
+    network: residencial
+  # Mojeek tiene índice propio (no es Google ni Bing por detrás). SearXNG lo
+  # marca inactivo porque a veces pide un captcha de prueba de trabajo; el
+  # 2026-11-24 respondía bien. Si queda "sin respuesta" casi siempre, se apaga
+  # con disabled: true.
+  - name: mojeek
+    disabled: false
+    inactive: false
     network: residencial
   - name: google cse
     network: residencial

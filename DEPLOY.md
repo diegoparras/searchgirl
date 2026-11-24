@@ -141,8 +141,8 @@ Para confirmarlo: Easypanel → servicio `searxng` → **Registros**, buscá `Se
 `TooManyRequests` o `CAPTCHA` junto al nombre del motor.
 
 El arreglo es el proxy residencial del paso 2. En `searxng/settings.yml` salen por la red
-`residencial` los motores de General (DuckDuckGo, DuckDuckGo web, Bing, Yahoo y Google CSE) y
-Google CSE de Imágenes. Wikipedia y Wikidata, que son APIs y no bloquean, salen directo y no
+`residencial` los motores de General (DuckDuckGo, DuckDuckGo web, Bing, Yahoo, Mojeek y Google
+CSE) y Google CSE de Imágenes. Wikipedia y Wikidata, que son APIs y no bloquean, salen directo y no
 gastan tráfico del proxy. Si un pedido falla, porque no conecta o porque el buscador responde
 403, 429 o 503, se repite una vez (`retries: 1` + `retry_on_http_error`). El reintento toma el
 proxy siguiente de la lista; con uno solo que rota la IP, sale con otra IP. Sin
