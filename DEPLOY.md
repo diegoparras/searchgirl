@@ -38,7 +38,16 @@ Easypanel → **Create Project** → nombre `searchgirl`.
     networks:
       residencial:
         retries: 1
+        retry_on_http_error: [403, 429, 503]
         proxies: http://USUARIO:CLAVE@HOST:PUERTO
+  ```
+  Con dos o más proxies, va la forma de lista: SearXNG los turna pedido a pedido y, si
+  uno falla, el reintento sale por el siguiente.
+  ```yaml
+        proxies:
+          all://:
+            - http://USUARIO:CLAVE@HOST1:PUERTO
+            - http://USUARIO:CLAVE@HOST2:PUERTO
   ```
   Sin esto, la categoría General da 0 resultados en un VPS: ver
   [General en 0 resultados en un VPS](#general-en-0-resultados-en-un-vps). La URL del proxy
@@ -133,8 +142,10 @@ Para confirmarlo: Easypanel → servicio `searxng` → **Registros**, buscá `Se
 
 El arreglo es el proxy residencial del paso 2. En `searxng/settings.yml` esos tres motores
 salen por la red `residencial`; Wikipedia y Wikidata, que son APIs y no bloquean, salen
-directo y no gastan tráfico del proxy. Un proxy residencial suele rotar la IP en cada pedido,
-y el `retries: 1` de esa red reintenta una vez con otra IP.
+directo y no gastan tráfico del proxy. Si un pedido falla, porque no conecta o porque el
+buscador responde 403, 429 o 503, se repite una vez (`retries: 1` + `retry_on_http_error`).
+El reintento toma el proxy siguiente de la lista; con uno solo que rota la IP, sale con otra
+IP. Sin `retry_on_http_error`, SearXNG sólo reintenta cuando no conecta.
 
 Después de pegar el proxy: **Deploy** del servicio `searxng`. En los registros, los pedidos de
 esos motores aparecen como `searx.network.residencial`.

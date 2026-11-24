@@ -2,6 +2,18 @@
 
 Formato basado en [Keep a Changelog](https://keepachangelog.com/es/1.1.0/); versionado [SemVer](https://semver.org/lang/es/).
 
+## [0.6.3] — 2026-11-24
+
+### Añadido
+- **Varios proxies que se turnan.** La red `residencial` de `searxng/settings.yml` documenta la
+  forma de lista (`all://` con varias URLs): SearXNG los usa por turno, pedido a pedido, y el
+  reintento sale por el siguiente.
+
+### Corregido
+- **El reintento no cubría los bloqueos.** SearXNG sólo reintenta cuando no conecta; si el
+  buscador respondía 403 o 429, no reintentaba, al revés de lo que decían el settings.yml y
+  DEPLOY.md de 0.6.2. La red `residencial` suma `retry_on_http_error: [403, 429, 503]`.
+
 ## [0.6.2] — 2026-11-24
 
 ### Corregido

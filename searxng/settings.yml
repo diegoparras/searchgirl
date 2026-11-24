@@ -49,10 +49,20 @@ outgoing:
   max_request_timeout: 15.0
   networks:
     residencial:
-      # Un proxy residencial suele rotar la IP en cada pedido: reintentar
-      # una vez cambia de IP y salva la mayoría de los captchas sueltos.
+      # Si un pedido falla, se repite una vez. Cada intento toma el proxy
+      # siguiente de la lista: con dos proxies, el reintento sale por el otro;
+      # con uno que rota la IP, sale con otra IP.
       retries: 1
+      # Sin esto SearXNG sólo reintenta cuando no conecta. Con esto también
+      # reintenta cuando el buscador responde con un bloqueo.
+      retry_on_http_error: [403, 429, 503]
+      # Un proxy:
       # proxies: http://USUARIO:CLAVE@HOST:PUERTO
+      # Varios, que se turnan pedido a pedido:
+      # proxies:
+      #   all://:
+      #     - http://USUARIO:CLAVE@HOST1:PUERTO
+      #     - http://USUARIO:CLAVE@HOST2:PUERTO
 
 # Los motores se declaran acá, y no se dejan a los valores por defecto, para
 # que General no cambie de motores al actualizar la imagen de SearXNG.
