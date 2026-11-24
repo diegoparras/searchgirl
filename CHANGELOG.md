@@ -2,6 +2,25 @@
 
 Formato basado en [Keep a Changelog](https://keepachangelog.com/es/1.1.0/); versionado [SemVer](https://semver.org/lang/es/).
 
+## [0.6.2] — 2026-11-24
+
+### Corregido
+- **General en 0 resultados en un VPS.** DuckDuckGo, Bing y Google CSE rechazan las búsquedas
+  que llegan desde la IP de un datacenter y quedaban todos "sin respuesta", mientras Noticias
+  andaba. `searxng/settings.yml` los manda ahora por una red `residencial`: así como viene sale
+  directo, y en un VPS se le pone el proxy residencial con una línea. Wikipedia y Wikidata salen
+  directo. Cómo configurarlo en DEPLOY.md, "General en 0 resultados en un VPS".
+- **Wikipedia y Wikidata no cargaban con SearXNG 2026.11.** La versión nueva exige
+  `general.contact_url`; el settings.yml trae la URL del proyecto y se cambia con
+  `SEARXNG_CONTACT_URL`. A Wikidata se le sube el timeout a 6 s.
+
+### Cambiado
+- Los motores de General quedan declarados en el settings.yml en vez de depender de los valores
+  por defecto de SearXNG, que cambiaron en 2026.11 (apaga Google, Bing y Brave, desactiva
+  Startpage y Mojeek). Google y Brave quedan apagados: responden 403 y 429 incluso desde una IP
+  hogareña.
+- DEPLOY.md toma el settings.yml del repo en lugar de una copia en línea.
+
 ## [0.6.1] — 2026-11-20
 
 ### Añadido

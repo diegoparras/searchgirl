@@ -13,7 +13,7 @@ import (
 // version es la unica fuente de verdad del numero: la usan el cartel de
 // arranque, /api/config, el MCP y el CI (searchgirl notas -version). Cada
 // version tiene su seccion en CHANGELOG.md (lo exige un test).
-const version = "0.6.1"
+const version = "0.6.2"
 
 func main() {
 	// No arguments = serve. "Fácil de usar" starts here.

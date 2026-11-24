@@ -5,6 +5,13 @@
 # habilitado — sin json, la API devuelve 403 y Searchgirl no funciona.
 use_default_settings: true
 
+general:
+  # Wikipedia, Wikidata y OpenStreetMap no cargan sin un contacto: la política
+  # de Wikimedia pide que cada instancia se identifique. Por defecto va la URL
+  # del proyecto; quien opere una instancia puede poner la suya con la variable
+  # SEARXNG_CONTACT_URL, que tiene prioridad sobre este valor.
+  contact_url: https://github.com/diegoparras/searchgirl
+
 server:
   limiter: false
   image_proxy: true
@@ -20,3 +27,57 @@ search:
 
 ui:
   static_use_hash: true
+
+# --- Motores de la categoría General -----------------------------------------
+#
+# DuckDuckGo, Bing y Google CSE rechazan las búsquedas que llegan desde la IP de
+# un datacenter (un VPS): devuelven captcha o 403 y en Searchgirl aparecen como
+# "sin respuesta", con General en 0 resultados mientras Noticias anda. Desde
+# una conexión hogareña responden bien.
+#
+# Por eso esos motores salen por la red "residencial". Así como viene, esa red
+# no tiene proxy y sale directo: en tu máquina funciona igual que siempre. En un
+# VPS, descomentá la línea de proxies y poné la URL de tu proxy residencial
+# (la misma que usás en HTTPS_PROXY en otras apps). Va sólo en el settings.yml
+# del servidor, nunca en el repo: SearXNG no lee el proxy de una variable de
+# entorno. Ver DEPLOY.md, "General en 0 resultados en un VPS".
+#
+# Wikipedia y Wikidata son APIs que no bloquean y salen directo, sin gastar
+# tráfico del proxy.
+outgoing:
+  request_timeout: 5.0
+  max_request_timeout: 15.0
+  networks:
+    residencial:
+      # Un proxy residencial suele rotar la IP en cada pedido: reintentar
+      # una vez cambia de IP y salva la mayoría de los captchas sueltos.
+      retries: 1
+      # proxies: http://USUARIO:CLAVE@HOST:PUERTO
+
+# Los motores se declaran acá, y no se dejan a los valores por defecto, para
+# que General no cambie de motores al actualizar la imagen de SearXNG.
+#
+# Quedan afuera, probados el 2026-11-24 con SearXNG 2026.11.23:
+#   - google: 403 incluso desde una IP hogareña (por eso SearXNG lo apaga).
+#   - brave: 429 en la primera búsqueda, también desde una IP hogareña.
+#   - startpage y mojeek: piden un captcha de prueba de trabajo y SearXNG los
+#     desactiva.
+# Prenderlos no suma resultados y deja "sin respuesta" en cada búsqueda. Con un
+# proxy residencial se pueden probar: disabled: false y network: residencial.
+engines:
+  - name: duckduckgo
+    disabled: false
+    network: residencial
+  - name: bing
+    disabled: false
+    network: residencial
+  - name: google cse
+    network: residencial
+  - name: google
+    disabled: true
+  - name: brave
+    disabled: true
+  - name: wikidata
+    # La consulta SPARQL de Wikidata tarda; con 3 s (el valor por defecto)
+    # se corta seguido y figura como "sin respuesta".
+    timeout: 6.0

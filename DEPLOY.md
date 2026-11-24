@@ -26,22 +26,23 @@ Easypanel → **Create Project** → nombre `searchgirl`.
   ```
   SEARXNG_SECRET=<64 hex al azar>        # openssl rand -hex 32
   ```
-- **Mounts → File Mount**, ruta `/etc/searxng/settings.yml`, contenido:
+- **Mounts → File Mount**, ruta `/etc/searxng/settings.yml`, contenido: el archivo
+  [`searxng/settings.yml`](searxng/settings.yml) del repo, entero
+  ([versión cruda](https://raw.githubusercontent.com/diegoparras/searchgirl/main/searxng/settings.yml)).
+  Lo imprescindible es `json` en `search.formats`: sin eso la API devuelve 403. El resto
+  fija los motores de General y les arma la red del proxy (ver el punto siguiente).
+- **Proxy residencial (recomendado en un VPS)**: en ese mismo File Mount, descomentá la
+  línea `proxies:` de la red `residencial` y poné tu proxy:
   ```yaml
-  use_default_settings: true
-  server:
-    limiter: false          # interno: el rate limit lo pone Searchgirl
-    image_proxy: true
-  search:
-    formats:
-      - html
-      - json                # IMPRESCINDIBLE: sin esto la API devuelve 403
-    autocomplete: duckduckgo
-    safe_search: 0
-    default_lang: auto
-  ui:
-    static_use_hash: true
+  outgoing:
+    networks:
+      residencial:
+        retries: 1
+        proxies: http://USUARIO:CLAVE@HOST:PUERTO
   ```
+  Sin esto, la categoría General da 0 resultados en un VPS: ver
+  [General en 0 resultados en un VPS](#general-en-0-resultados-en-un-vps). La URL del proxy
+  vive sólo en el panel; SearXNG no la lee de una variable de entorno.
 - **Domains**: **ninguno** (no lo expongas — es el backend interno).
 - **Deploy**.
 
@@ -117,6 +118,30 @@ cuando quieras su imagen nueva. Cero estado que migrar: Searchgirl no tiene base
 | Entra sin pedir login | No están `SEARCHGIRL_USER`/`SEARCHGIRL_PASS` en el servicio `app` (o quedaron en el servicio equivocado). |
 | `refusing to serve on a non-loopback address` en los logs | Estás corriendo el binario SIN auth fuera de Docker/loopback. Poné usuario+clave, token, o `SEARCHGIRL_ALLOW_INSECURE=1` si el puerto ya está firewalleado. |
 | Respuesta IA no aparece | `/api/config` → `llm.available` debe ser `true`; revisá la API key y mirá los logs del servicio `app`. |
+| General da 0 resultados y el pie dice "0 motores · sin respuesta: …", pero Noticias anda | Los motores generales bloquean la IP del VPS. Ver [General en 0 resultados en un VPS](#general-en-0-resultados-en-un-vps). |
+
+### General en 0 resultados en un VPS
+
+DuckDuckGo, Bing y Google CSE rechazan las búsquedas que llegan desde la IP de un datacenter:
+responden con captcha o 403, SearXNG los marca "sin respuesta" y la categoría General queda en
+0 resultados. Noticias e Imágenes siguen andando porque usan otros servicios de esos mismos
+buscadores, que toleran IPs de servidor. Desde una conexión hogareña todo responde: por eso
+localmente no se ve.
+
+Para confirmarlo: Easypanel → servicio `searxng` → **Registros**, buscá `SearxEngineAccessDenied`,
+`TooManyRequests` o `CAPTCHA` junto al nombre del motor.
+
+El arreglo es el proxy residencial del paso 2. En `searxng/settings.yml` esos tres motores
+salen por la red `residencial`; Wikipedia y Wikidata, que son APIs y no bloquean, salen
+directo y no gastan tráfico del proxy. Un proxy residencial suele rotar la IP en cada pedido,
+y el `retries: 1` de esa red reintenta una vez con otra IP.
+
+Después de pegar el proxy: **Deploy** del servicio `searxng`. En los registros, los pedidos de
+esos motores aparecen como `searx.network.residencial`.
+
+Google y Brave quedan apagados: el 2026-11-24, con SearXNG 2026.11.23, respondían 403 y 429
+incluso desde una IP hogareña. Con el proxy se pueden probar poniendo `disabled: false` y
+`network: residencial` en su entrada.
 
 ---
 
