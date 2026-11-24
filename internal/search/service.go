@@ -7,7 +7,9 @@ package search
 import (
 	"context"
 	"fmt"
+	"io"
 	"os"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -30,6 +32,12 @@ type Service struct {
 	// del token Bearer (en minúsculas) -> tokens que se le pasan a SearXNG.
 	// Quien no figura busca sin motores privados.
 	EngineTokens map[string][]string
+
+	// Log recibe una línea por cada búsqueda que llega a SearXNG (no las que
+	// salen de la caché): quién buscó, si fue con motores privados, qué
+	// motores trajeron resultados y cuáles fallaron. Nunca la consulta en sí.
+	// nil = sin log.
+	Log io.Writer
 }
 
 // FromEnv builds the service the way the container runs it:
@@ -79,6 +87,7 @@ func FromEnv() *Service {
 		SearchCache:     cache.New(cacheTTL, cacheMax),
 		EnginesCache:    cache.New(time.Hour, 4),
 		EngineTokens:    ParseEngineTokens(os.Getenv("SEARCHGIRL_SEARXNG_TOKENS")),
+		Log:             os.Stderr,
 	}
 }
 
@@ -135,8 +144,11 @@ func (s *Service) Search(ctx context.Context, q Query) (*searx.Response, error) 
 		strings.ToLower(params.Query), params.Category, params.Language,
 		params.TimeRange, params.SafeSearch, params.Page, strings.Join(params.Engines, ","),
 		strings.Join(params.Tokens, ","))
+	caller := CallerFrom(ctx)
 	val, cached, err := s.SearchCache.Do(key, func() (any, error) {
-		return s.Client.Search(ctx, params)
+		resp, err := s.Client.Search(ctx, params)
+		s.logSearch(caller, params, resp, err)
+		return resp, err
 	})
 	if err != nil {
 		return nil, err
@@ -145,6 +157,56 @@ func (s *Service) Search(ctx context.Context, q Query) (*searx.Response, error) 
 	resp := val.(*searx.Response).Clone()
 	resp.Meta.Cached = cached
 	return resp, nil
+}
+
+// logSearch escribe una línea por búsqueda real a SearXNG, por ejemplo:
+//
+//	searchgirl: busqueda cliente=secretaria privados=si categoria=general pagina=1 resultados=20 motores=braveapi:20,duckduckgo:7 fallaron=-
+//
+// motores cuenta en cuántos resultados aparece cada motor (un resultado
+// puede venir de varios). Sirve para ver desde el log si un motor privado
+// pago, como braveapi, se consultó y respondió.
+func (s *Service) logSearch(caller string, p searx.Params, resp *searx.Response, err error) {
+	if s.Log == nil {
+		return
+	}
+	if caller == "" {
+		caller = "-"
+	}
+	privados := "no"
+	if len(p.Tokens) > 0 {
+		privados = "si"
+	}
+	head := fmt.Sprintf("searchgirl: busqueda cliente=%s privados=%s categoria=%s pagina=%d",
+		caller, privados, p.Category, p.Page)
+	if err != nil {
+		fmt.Fprintf(s.Log, "%s error=%q\n", head, err.Error())
+		return
+	}
+	count := map[string]int{}
+	for _, r := range resp.Results {
+		for _, e := range r.Engines {
+			count[e]++
+		}
+	}
+	names := make([]string, 0, len(count))
+	for e := range count {
+		names = append(names, e)
+	}
+	sort.Strings(names)
+	motores := make([]string, 0, len(names))
+	for _, e := range names {
+		motores = append(motores, fmt.Sprintf("%s:%d", e, count[e]))
+	}
+	fallaron := strings.Join(resp.Meta.EnginesFailed, ",")
+	if fallaron == "" {
+		fallaron = "-"
+	}
+	m := strings.Join(motores, ",")
+	if m == "" {
+		m = "-"
+	}
+	fmt.Fprintf(s.Log, "%s resultados=%d motores=%s fallaron=%s\n", head, len(resp.Results), m, fallaron)
 }
 
 func (s *Service) Suggest(ctx context.Context, q string) ([]string, error) {

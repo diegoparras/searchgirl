@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"reflect"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -77,5 +78,44 @@ func TestSearchPassesTokensOnlyToConfiguredCaller(t *testing.T) {
 	want := []string{"brave-interno", ""}
 	if got := f.calls(); !reflect.DeepEqual(got, want) {
 		t.Errorf("tokens recibidos por SearXNG = %q, want %q", got, want)
+	}
+}
+
+// Cada búsqueda que llega a SearXNG deja una línea con el cliente, si fue con
+// motores privados, qué motores respondieron y cuáles fallaron; las que salen
+// de la caché no. La consulta nunca aparece en el log.
+func TestSearchLogsEnginesPerCaller(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte(`{"query":"x","results":[
+			{"url":"https://a.example/","title":"A","engines":["braveapi","duckduckgo"]},
+			{"url":"https://b.example/","title":"B","engines":["braveapi"]}
+		],"unresponsive_engines":[["bing","CAPTCHA"]]}`))
+	}))
+	defer ts.Close()
+
+	var log strings.Builder
+	s := &Service{
+		Client:       searx.New(ts.URL, 5*time.Second),
+		SearchCache:  cache.New(time.Minute, 16),
+		EngineTokens: ParseEngineTokens("secretaria:brave-interno"),
+		Log:          &log,
+	}
+	for _, ctx := range []context.Context{
+		WithCaller(context.Background(), "secretaria"),
+		WithCaller(context.Background(), "secretaria"), // de la caché: sin línea
+		context.Background(),
+	} {
+		if _, err := s.Search(ctx, Query{Query: "consulta privada"}); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	want := "searchgirl: busqueda cliente=secretaria privados=si categoria=general pagina=1 resultados=2 motores=braveapi:2,duckduckgo:1 fallaron=bing\n" +
+		"searchgirl: busqueda cliente=- privados=no categoria=general pagina=1 resultados=2 motores=braveapi:2,duckduckgo:1 fallaron=bing\n"
+	if got := log.String(); got != want {
+		t.Errorf("log =\n%s\nwant\n%s", got, want)
+	}
+	if strings.Contains(log.String(), "consulta privada") {
+		t.Error("la consulta no debe aparecer en el log")
 	}
 }

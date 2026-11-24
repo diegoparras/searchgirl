@@ -189,8 +189,26 @@ demás (la interfaz, Custodia, cualquier otro token) buscan sin Brave. Sale dire
    ```
    **Deploy** de `app`. Para sumar otro cliente: `secretaria:EL_TOKEN_INTERNO,otro:EL_TOKEN_INTERNO`.
 
-Sin la variable del paso 3, nadie usa Brave: si se olvida, no se gasta nada. En los registros de
-`searxng`, una búsqueda de ese cliente consulta `braveapi` y la de cualquier otro, no.
+Sin la variable del paso 3, nadie usa Brave: si se olvida, no se gasta nada.
+
+**Cómo verificarlo.** Los registros de `searxng` no sirven para esto: sólo anotan los motores que
+fallan. Los de `app` sí: cada búsqueda que llega a SearXNG deja una línea con quién buscó, si fue
+con motores privados, qué motores trajeron resultados (y en cuántos) y cuáles fallaron. La
+consulta no se anota. Una búsqueda de SecretarIA con Brave andando se ve así:
+
+```
+searchgirl: busqueda cliente=secretaria privados=si categoria=general pagina=1 resultados=20 motores=braveapi:20,duckduckgo:7 fallaron=-
+```
+
+- `privados=no` con `cliente=secretaria`: el nombre en `SEARCHGIRL_SEARXNG_TOKENS` no coincide con
+  el del token Bearer.
+- `privados=si` sin `braveapi` en `motores` ni en `fallaron`: el token interno no coincide con el
+  del File Mount, o `searxng` no se redeployó.
+- `braveapi` en `fallaron`: la clave de Brave, el plan o el tope; el motivo está en los registros
+  de `searxng`.
+- `cliente=-`: búsqueda desde la interfaz (sin token Bearer).
+
+Las búsquedas que salen de la caché (5 minutos) no llegan a SearXNG ni a Brave, y no dejan línea.
 
 **Cuánto gasta.** Cada búsqueda de General de ese cliente es 1 pedido (20 resultados) y cada
 página más, otro. Las otras categorías no la usan.

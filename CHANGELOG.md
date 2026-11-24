@@ -2,6 +2,19 @@
 
 Formato basado en [Keep a Changelog](https://keepachangelog.com/es/1.1.0/); versionado [SemVer](https://semver.org/lang/es/).
 
+## [0.6.6] — 2026-11-24
+
+### Añadido
+- **Una línea de log por búsqueda** que llega a SearXNG: cliente (nombre del token Bearer, `-` si
+  es la interfaz), si fue con motores privados, motores que trajeron resultados con su cantidad y
+  motores que fallaron. Nunca la consulta. Las búsquedas servidas desde la caché no la dejan.
+  Sirve para ver desde los registros de Searchgirl si un motor privado pago, como `braveapi`, se
+  consultó y respondió, cosa que los registros de SearXNG no muestran.
+
+### Corregido
+- DEPLOY.md decía que en los registros de `searxng` se veía la consulta a `braveapi`. No es así:
+  sólo anotan los motores que fallan. Ahora explica cómo verificarlo con la línea nueva.
+
 ## [0.6.5] — 2026-11-24
 
 ### Añadido
