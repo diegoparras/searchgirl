@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"reflect"
+	"sort"
 	"strings"
 	"sync"
 	"testing"
@@ -78,6 +79,110 @@ func TestSearchPassesTokensOnlyToConfiguredCaller(t *testing.T) {
 	want := []string{"brave-interno", ""}
 	if got := f.calls(); !reflect.DeepEqual(got, want) {
 		t.Errorf("tokens recibidos por SearXNG = %q, want %q", got, want)
+	}
+}
+
+// DuckDuckGo pide CAPTCHA si la búsqueda pide una región: se le pregunta
+// aparte, sin idioma ni categoría, se lo saca del pedido principal y los
+// resultados se juntan. Con language=all va todo en un pedido.
+func TestSearchAsksNoLanguageEnginesApart(t *testing.T) {
+	var mu sync.Mutex
+	var pedidos []string
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/config" {
+			_, _ = w.Write([]byte(`{"engines":[
+				{"name":"bing","categories":["general","web"],"enabled":true},
+				{"name":"duckduckgo","categories":["general","web"],"enabled":true}]}`))
+			return
+		}
+		q := r.URL.Query()
+		mu.Lock()
+		pedidos = append(pedidos, "categories="+q.Get("categories")+" language="+q.Get("language")+
+			" engines="+q.Get("engines")+" disabled="+q.Get("disabled_engines"))
+		mu.Unlock()
+		if q.Get("engines") == "duckduckgo" {
+			_, _ = w.Write([]byte(`{"query":"x","results":[
+				{"url":"https://a.example/","title":"A","engines":["duckduckgo"],"score":1},
+				{"url":"https://c.example/","title":"C","engines":["duckduckgo"],"score":0.5}]}`))
+			return
+		}
+		_, _ = w.Write([]byte(`{"query":"x","results":[
+			{"url":"https://a.example/","title":"A","engines":["bing"],"score":1},
+			{"url":"https://b.example/","title":"B","engines":["bing"],"score":0.8}]}`))
+	}))
+	defer ts.Close()
+
+	var log strings.Builder
+	s := &Service{Client: searx.New(ts.URL, 5*time.Second), DefaultLanguage: "es", NoLanguageEngines: []string{"duckduckgo"}, Log: &log}
+	resp, err := s.Search(context.Background(), Query{Query: "empanadas salteñas"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	mu.Lock()
+	got := append([]string(nil), pedidos...)
+	pedidos = nil
+	mu.Unlock()
+	sort.Strings(got)
+	want := []string{
+		"categories= language=all engines=duckduckgo disabled=",
+		"categories=general language=es engines= disabled=duckduckgo__general",
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("pedidos a SearXNG =\n%q\nwant\n%q", got, want)
+	}
+	if len(resp.Results) != 3 || resp.Results[0].URL != "https://a.example/" || !reflect.DeepEqual(resp.Results[0].Engines, []string{"bing", "duckduckgo"}) || resp.Language != "es" {
+		t.Errorf("resultados juntados mal: %+v (language %q)", resp.Results, resp.Language)
+	}
+	if !strings.Contains(log.String(), "resultados=3 motores=bing:2,duckduckgo:2 fallaron=-") {
+		t.Errorf("log = %q", log.String())
+	}
+
+	if _, err := s.Search(context.Background(), Query{Query: "empanadas", Language: "all"}); err != nil {
+		t.Fatal(err)
+	}
+	mu.Lock()
+	defer mu.Unlock()
+	if want := []string{"categories=general language=all engines= disabled="}; !reflect.DeepEqual(pedidos, want) {
+		t.Errorf("con language=all, pedidos = %q, want %q", pedidos, want)
+	}
+}
+
+// Si el pedido aparte falla, DuckDuckGo cuenta como fallado y queda lo del
+// principal.
+func TestSearchNoLanguageEngineFailureKeepsMain(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.URL.Path == "/config":
+			_, _ = w.Write([]byte(`{"engines":[{"name":"duckduckgo","categories":["general"],"enabled":true}]}`))
+		case r.URL.Query().Get("engines") == "duckduckgo":
+			w.WriteHeader(http.StatusInternalServerError)
+		default:
+			_, _ = w.Write([]byte(`{"query":"x","results":[{"url":"https://b.example/","title":"B","engines":["bing"]}]}`))
+		}
+	}))
+	defer ts.Close()
+	s := &Service{Client: searx.New(ts.URL, 5*time.Second), DefaultLanguage: "es", NoLanguageEngines: []string{"duckduckgo"}}
+	resp, err := s.Search(context.Background(), Query{Query: "x"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(resp.Results) != 1 || !reflect.DeepEqual(resp.Meta.EnginesFailed, []string{"duckduckgo"}) {
+		t.Errorf("results=%+v fallaron=%v", resp.Results, resp.Meta.EnginesFailed)
+	}
+}
+
+func TestParseEngineList(t *testing.T) {
+	for _, c := range []struct {
+		in   string
+		want []string
+	}{
+		{"", []string{"duckduckgo"}},
+		{"-", nil},
+		{" duckduckgo , mojeek,", []string{"duckduckgo", "mojeek"}},
+	} {
+		if got := ParseEngineList(c.in, "duckduckgo"); !reflect.DeepEqual(got, c.want) {
+			t.Errorf("ParseEngineList(%q) = %v, want %v", c.in, got, c.want)
+		}
 	}
 }
 

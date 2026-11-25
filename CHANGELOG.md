@@ -2,6 +2,21 @@
 
 Formato basado en [Keep a Changelog](https://keepachangelog.com/es/1.1.0/); versionado [SemVer](https://semver.org/lang/es/).
 
+## [0.6.7] — 2026-11-25
+
+### Corregido
+- **DuckDuckGo vuelve a traer resultados.** Pedía CAPTCHA en cada búsqueda porque Searchgirl le
+  pasa el idioma (`es`) y DuckDuckGo lo convierte en una región (`es-es`); sin idioma responde
+  bien, incluso por WARP. SearXNG aplica un solo idioma a todos los motores de un pedido, así
+  que ahora Searchgirl le pregunta aparte, sin idioma, a la vez que el pedido principal (del que
+  lo saca con `disabled_engines`), y junta los resultados como lo habría hecho SearXNG: un
+  repetido queda una vez, con los motores y el puntaje de los dos. Si el pedido aparte falla,
+  DuckDuckGo figura entre los que fallaron y queda lo del principal. Probado contra SearXNG real
+  por WARP: 10 resultados de DuckDuckGo en cada una de tres búsquedas, y argentinos.
+- Qué motores van sin idioma se elige con `SEARCHGIRL_SIN_IDIOMA` (por defecto `duckduckgo`;
+  `-` para ninguno). Sólo aplica si el motor está activo en la categoría o se pidió por
+  `engines`, y si la búsqueda tiene idioma.
+
 ## [0.6.6] — 2026-11-24
 
 ### Añadido

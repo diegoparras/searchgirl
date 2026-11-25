@@ -72,6 +72,10 @@ type Params struct {
 	// de sus tokens. Sin tokens, SearXNG ni lo consulta, sea por categoría,
 	// por engines= o por !bang.
 	Tokens []string
+	// DisabledEngines saca motores de la categoría sólo en este pedido (va como
+	// disabled_engines=motor__categoria). Necesita Category; sin ella no hace
+	// nada.
+	DisabledEngines []string
 }
 
 // Search runs one metasearch and returns the normalized response.
@@ -100,6 +104,13 @@ func (c *Client) Search(ctx context.Context, p Params) (*Response, error) {
 	}
 	if len(p.Tokens) > 0 {
 		v.Set("tokens", strings.Join(p.Tokens, ","))
+	}
+	if len(p.DisabledEngines) > 0 && p.Category != "" {
+		off := make([]string, 0, len(p.DisabledEngines))
+		for _, e := range p.DisabledEngines {
+			off = append(off, e+"__"+p.Category)
+		}
+		v.Set("disabled_engines", strings.Join(off, ","))
 	}
 
 	start := time.Now()

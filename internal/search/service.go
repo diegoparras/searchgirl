@@ -38,6 +38,13 @@ type Service struct {
 	// motores trajeron resultados y cuáles fallaron. Nunca la consulta en sí.
 	// nil = sin log.
 	Log io.Writer
+
+	// NoLanguageEngines son motores que se consultan sin idioma, en un pedido
+	// aparte a la vez que el principal, y se sacan del principal. DuckDuckGo
+	// pide CAPTCHA cuando la búsqueda pide una región (es -> es-es) y responde
+	// bien sin ella. Sólo aplica si el motor está en la categoría (o se pidió
+	// por engines) y la búsqueda tiene idioma; nil = nunca.
+	NoLanguageEngines []string
 }
 
 // FromEnv builds the service the way the container runs it:
@@ -47,6 +54,7 @@ type Service struct {
 //	SEARCHGIRL_DEFAULT_LANGUAGE  default language (default es)
 //	SEARCHGIRL_SAFESEARCH        default safesearch 0|1|2 (default 0)
 //	SEARCHGIRL_SEARXNG_TOKENS    motores privados por cliente: nombre:token,...
+//	SEARCHGIRL_SIN_IDIOMA        motores que se consultan sin idioma (default duckduckgo; "-" = ninguno)
 func FromEnv() *Service {
 	base := os.Getenv("SEARXNG_URL")
 	if base == "" {
@@ -88,7 +96,28 @@ func FromEnv() *Service {
 		EnginesCache:    cache.New(time.Hour, 4),
 		EngineTokens:    ParseEngineTokens(os.Getenv("SEARCHGIRL_SEARXNG_TOKENS")),
 		Log:             os.Stderr,
+
+		NoLanguageEngines: ParseEngineList(os.Getenv("SEARCHGIRL_SIN_IDIOMA"), "duckduckgo"),
 	}
+}
+
+// ParseEngineList lee una lista de motores separados por comas. Vacía da def;
+// "-" da ninguno.
+func ParseEngineList(s, def string) []string {
+	s = strings.TrimSpace(s)
+	if s == "" {
+		s = def
+	}
+	if s == "-" {
+		return nil
+	}
+	var out []string
+	for _, e := range strings.Split(s, ",") {
+		if e = strings.TrimSpace(e); e != "" {
+			out = append(out, e)
+		}
+	}
+	return out
 }
 
 // Query is a search request before defaults. Zero values mean "use default".
@@ -146,7 +175,7 @@ func (s *Service) Search(ctx context.Context, q Query) (*searx.Response, error) 
 		strings.Join(params.Tokens, ","))
 	caller := CallerFrom(ctx)
 	val, cached, err := s.SearchCache.Do(key, func() (any, error) {
-		resp, err := s.Client.Search(ctx, params)
+		resp, err := s.searchSplit(ctx, params)
 		s.logSearch(caller, params, resp, err)
 		return resp, err
 	})
@@ -157,6 +186,96 @@ func (s *Service) Search(ctx context.Context, q Query) (*searx.Response, error) 
 	resp := val.(*searx.Response).Clone()
 	resp.Meta.Cached = cached
 	return resp, nil
+}
+
+// searchSplit hace la búsqueda en SearXNG. Si algún motor de
+// NoLanguageEngines entraría, lo saca del pedido principal y le pregunta
+// aparte, sin idioma y sin categoría (con categoría, SearXNG sumaría todos
+// los motores de ella), y junta los resultados. Si el pedido aparte falla, el
+// motor cuenta como fallado y queda lo del principal.
+func (s *Service) searchSplit(ctx context.Context, p searx.Params) (*searx.Response, error) {
+	sin := s.noLanguageFor(ctx, p)
+	if len(sin) == 0 {
+		return s.Client.Search(ctx, p)
+	}
+	main := p
+	main.DisabledEngines = sin
+	main.Engines = without(p.Engines, sin)
+	extra := searx.Params{
+		Query: p.Query, Language: "all", TimeRange: p.TimeRange, SafeSearch: p.SafeSearch,
+		Page: p.Page, Engines: sin, Tokens: p.Tokens,
+	}
+
+	type res struct {
+		resp *searx.Response
+		err  error
+	}
+	ch := make(chan res, 1)
+	go func() {
+		r, err := s.Client.Search(ctx, extra)
+		ch <- res{r, err}
+	}()
+	resp, err := s.Client.Search(ctx, main)
+	other := <-ch
+	if err != nil {
+		return nil, err
+	}
+	if other.err != nil {
+		other.resp = &searx.Response{Meta: searx.Meta{EnginesFailed: sin}}
+	}
+	merged := searx.Merge(resp, other.resp)
+	merged.Language = p.Language
+	return merged, nil
+}
+
+// noLanguageFor devuelve los motores de NoLanguageEngines que esta búsqueda
+// consultaría: los de la categoría según el catálogo de SearXNG o los pedidos
+// por engines. Sin idioma (o "all") no hace falta separar nada; si el
+// catálogo no responde, tampoco se separa.
+func (s *Service) noLanguageFor(ctx context.Context, p searx.Params) []string {
+	if len(s.NoLanguageEngines) == 0 || p.Language == "" || p.Language == "all" {
+		return nil
+	}
+	cat, err := s.Engines(ctx)
+	if err != nil {
+		return nil
+	}
+	var out []string
+	for _, name := range s.NoLanguageEngines {
+		in := false
+		for _, e := range cat[p.Category] {
+			if e.Name == name {
+				in = true
+				break
+			}
+		}
+		for _, e := range p.Engines {
+			if e == name {
+				in = true
+			}
+		}
+		if in {
+			out = append(out, name)
+		}
+	}
+	return out
+}
+
+func without(list, drop []string) []string {
+	var out []string
+	for _, e := range list {
+		keep := true
+		for _, d := range drop {
+			if e == d {
+				keep = false
+				break
+			}
+		}
+		if keep {
+			out = append(out, e)
+		}
+	}
+	return out
 }
 
 // logSearch escribe una línea por búsqueda real a SearXNG, por ejemplo:

@@ -112,6 +112,7 @@ LLM_MODEL=qwen2.5:7b
 | `SEARCHGIRL_USER` / `SEARCHGIRL_PASS` | — | Login local standalone: un usuario, pantalla de entrada estándar Escriba |
 | `SEARCHGIRL_MCP_TOKEN` | — | Tokens Bearer para API+MCP. Varios con nombre: `claude:abc...,n8n:def...` — revocar uno no rota los demás |
 | `SEARCHGIRL_SEARXNG_TOKENS` | — | Motores privados de SearXNG por cliente: `nombre:token,...`. `nombre` es el de un token Bearer (el de la variable de arriba o la etiqueta del panel Conexión) y `token`, uno de los `tokens:` de un motor en el settings.yml. Sólo esos clientes consultan esos motores (p. ej. una API paga como `braveapi`); el resto, la interfaz incluida, no |
+| `SEARCHGIRL_SIN_IDIOMA` | `duckduckgo` | Motores que se consultan sin idioma, en un pedido aparte a SearXNG, y se juntan con el resto. DuckDuckGo pide CAPTCHA cuando la búsqueda lleva idioma. `-` = ninguno |
 | `SEARCHGIRL_TRUSTED_PROXIES` | — | IPs/CIDRs del reverse proxy (coma-separados). Con esto el rate limit usa la IP real del cliente vía `X-Forwarded-For` |
 | `SEARCHGIRL_RATE_RPS` / `SEARCHGIRL_RATE_BURST` | `20` / `60` | Rate limit por IP en API, MCP y login (`RPS=0` lo desactiva) |
 | `AUTH_MODE` | vacío | `federado` activa OIDC con Lockatus |
